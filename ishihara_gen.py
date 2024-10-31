@@ -6,7 +6,6 @@ import math
 import random
 import numpy as np
 
-from functools import lru_cache
 from scipy.ndimage import binary_dilation
 
 
@@ -103,7 +102,6 @@ class IshiharaPlateGenerator:
         self.current_fg_color_index = (self.current_fg_color_index + 1) % len(self.figure_colors)
         return color
     
-    @lru_cache(maxsize=1024)
     def is_inside_main_circle(self, x, y):
         dx = x - self.center_x
         dy = y - self.center_y
@@ -139,11 +137,11 @@ class IshiharaPlateGenerator:
         golden_ratio = (1 + 5 ** 0.5) / 2
         
         for i in range(num_circles):
-            radius = random.choice(self.small_circle_radii)
+            visual_radius = random.choice(self.small_circle_radii)
             
-            # Add extra space for the white ring
-            ring_space = radius * 0.08  # Same as visual ring thickness
-            physics_radius = radius + ring_space
+            # Physics radius must include both the circle and its white ring
+            ring_space = visual_radius * 0.08  # 8% for the white ring
+            physics_radius = visual_radius + ring_space
             
             angle = i * golden_ratio * 2 * math.pi
             r = random.uniform(0, self.rect_width * 0.45)
@@ -156,15 +154,15 @@ class IshiharaPlateGenerator:
             body = pymunk.Body(mass, moment)
             body.position = x, y
             
-            # Use the larger radius for collision detection
+            # Use the larger physics radius for collision detection
             shape = pymunk.Circle(body, physics_radius)
             shape.friction = 0.7
             shape.elasticity = 0.1
             shape.collision_type = 1
             
             self.space.add(body, shape)
-            # Store the visual radius (without ring space) for drawing
-            circles.append((shape, radius))
+            # Store the visual radius for drawing
+            circles.append((shape, visual_radius))
         
         return circles
 
