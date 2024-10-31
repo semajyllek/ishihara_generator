@@ -243,49 +243,191 @@ class IshiharaPlateGenerator:
         
         return circles
 
-    def run_physics_simulation(self):
-        """Modified physics simulation with better initial placement"""
-        circles = []
-        batch_size = 30  # Smaller batch size for more controlled placement
-        batches = 0
-        max_batches = 40
-        
-        coverage_threshold = 0.85  # Target coverage percentage
-        
-        while batches < max_batches:
-            new_circles = self.add_circles_batch(batch_size)
-            if not new_circles:
-                break
-                
-            circles.extend(new_circles)
+
+
+    def find_valid_position(self, radius, existing_circles, max_attempts=50):
+        """Find a valid position for a new circle that's tangent to existing circles"""
+        if not existing_circles:
+            # First circle - place near center
+            return self.center_x, self.center_y
             
-            # More gentle physics simulation
-            for _ in range(30):
-                self.space.step(1/60.0)
+        for _ in range(max_attempts):
+            # Pick random existing circles to be tangent to
+            if len(existing_circles) >= 2:
+                c1, c2 = random.sample(existing_circles, 2)
+                x1, y1 = c1[0]
+                r1 = c1[1]
+                x2, y2 = c2[0]
+                r2 = c2[1]
                 
-                # Apply gentle force to settle circles
-                for circle, _ in new_circles:
-                    circle.body.apply_force_at_local_point((0, 200.0), (0, 0))
+                # Calculate positions where a circle of given radius would be tangent to both circles
+                d = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+                
+                # Skip if circles are too far apart or too close
+                if d > r1 + r2 + 2 * radius + 2 or d < abs(r1 - r2):
+                    continue
                     
-                    # Add damping to reduce bouncing
-                    circle.body.velocity *= 0.95
-                    circle.body.angular_velocity *= 0.95
+                # Calculate possible positions
+                pos_list = []
+                
+                # Base position
+                base_x = x1 + (x2 - x1) * (r1 + radius) / d
+                base_y = y1 + (y2 - y1) * (r1 + radius) / d
+                
+                # Perpendicular offset
+                h = math.sqrt((r1 + radius)**2 - ((r1 + radius)**2 + d**2 - (r2 + radius)**2)**2 / (4 * d**2))
+                dx = -h * (y2 - y1) / d
+                dy = h * (x2 - x1) / d
+                
+                pos_list.append((base_x + dx, base_y + dy))
+                pos_list.append((base_x - dx, base_y - dy))
+                
+                # Check each possible position
+                for x, y in pos_list:
+                    valid = True
+                    
+                    # Check if inside main circle
+                    if math.sqrt((x - self.center_x)**2 + (y - self.center_y)**2) > self.main_circle_radius - radius:
+                        continue
+                        
+                    # Check against all other existing circles
+                    for other_x, other_y, other_r in [(c[0][0], c[0][1], c[1]) for c in existing_circles]:
+                        min_dist = radius + other_r + 1  # 1 pixel gap
+                        actual_dist = math.sqrt((x - other_x)**2 + (y - other_y)**2)
+                        if actual_dist < min_dist:
+                            valid = False
+                            break
+                    
+                    if valid:
+                        return x, y
             
-            batches += 1
-            
-            # Check coverage after each batch
-            coverage = self.check_coverage(circles)
-            if coverage > coverage_threshold:
-                break
+            else:
+                # Place adjacent to single existing circle
+                c1 = existing_circles[0]
+                x1, y1 = c1[0]
+                r1 = c1[1]
+                
+                angle = random.uniform(0, 2 * math.pi)
+                x = x1 + (r1 + radius + 1) * math.cos(angle)
+                y = y1 + (r1 + radius + 1) * math.sin(angle)
+                
+                if math.sqrt((x - self.center_x)**2 + (y - self.center_y)**2) <= self.main_circle_radius - radius:
+                    return x, y
         
-        # Final gentle settling
-        for _ in range(60):
-            self.space.step(1/60.0)
-            for circle, _ in circles:
-                circle.body.velocity *= 0.98
-                circle.body.angular_velocity *= 0.98
+        return None
+    
+
+
+    def pack_circles(self):
+        """Pack circles using a geometric approach"""
+        circles = []
+        radii = sorted(self.small_circle_radii, reverse=True)
+        
+        # Start with larger circles for the number
+        number_circles = []
+        background_circles = []
+        
+        # First pass - place larger circles for the number
+        for radius in radii[:3]:  # Use largest sizes for number
+            attempts = 0
+            while attempts < 100:
+                x = random.uniform(self.number_x, self.number_x + self.number_width)
+                y = random.uniform(self.number_y, self.number_y + self.number_height)
+                
+                if self.is_inside_number(x, y):
+                    pos = self.find_valid_position(radius, number_circles)
+                    if pos:
+                        number_circles.append((pos, radius))
+                        if len(number_circles) >= 15:  # Adjust based on number size
+                            break
+                attempts += 1
+                
+        # Second pass - fill background
+        for radius in radii[1:]:  # Use mix of sizes for background
+            attempts = 0
+            while attempts < 50:
+                x = random.uniform(self.center_x - self.main_circle_radius, 
+                                self.center_x + self.main_circle_radius)
+                y = random.uniform(self.center_y - self.main_circle_radius,
+                                self.center_y + self.main_circle_radius)
+                
+                if not self.is_inside_number(x, y) and self.is_inside_main_circle(x, y):
+                    pos = self.find_valid_position(radius, background_circles)
+                    if pos:
+                        background_circles.append((pos, radius))
+                attempts += 1
+                
+        # Convert to physics objects
+        for pos, radius in number_circles + background_circles:
+            body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
+            body.position = pos
+            shape = pymunk.Circle(body, radius)
+            shape.friction = 0.9
+            shape.elasticity = 0.1
+            self.space.add(body, shape)
+            circles.append((shape, radius))
         
         return circles
+
+    def run_physics_simulation(self):
+        """Replaced physics-based placement with geometric packing"""
+        return self.pack_circles()
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # def run_physics_simulation(self):
+    #     """Modified physics simulation with better initial placement"""
+    #     circles = []
+    #     batch_size = 30  # Smaller batch size for more controlled placement
+    #     batches = 0
+    #     max_batches = 40
+        
+    #     coverage_threshold = 0.85  # Target coverage percentage
+        
+    #     while batches < max_batches:
+    #         new_circles = self.add_circles_batch(batch_size)
+    #         if not new_circles:
+    #             break
+                
+    #         circles.extend(new_circles)
+            
+    #         # More gentle physics simulation
+    #         for _ in range(30):
+    #             self.space.step(1/60.0)
+                
+    #             # Apply gentle force to settle circles
+    #             for circle, _ in new_circles:
+    #                 circle.body.apply_force_at_local_point((0, 200.0), (0, 0))
+                    
+    #                 # Add damping to reduce bouncing
+    #                 circle.body.velocity *= 0.95
+    #                 circle.body.angular_velocity *= 0.95
+            
+    #         batches += 1
+            
+    #         # Check coverage after each batch
+    #         coverage = self.check_coverage(circles)
+    #         if coverage > coverage_threshold:
+    #             break
+        
+    #     # Final gentle settling
+    #     for _ in range(60):
+    #         self.space.step(1/60.0)
+    #         for circle, _ in circles:
+    #             circle.body.velocity *= 0.98
+    #             circle.body.angular_velocity *= 0.98
+        
+    #     return circles
 
     def check_coverage(self, circles):
         """Improved coverage checking with grid-based sampling"""
