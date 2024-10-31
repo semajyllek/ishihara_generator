@@ -195,39 +195,66 @@ class IshiharaPlateGenerator:
 
 
     def run_physics_simulation(self):
-        """Optimized physics simulation"""
+        """Enhanced physics simulation with density-aware settling"""
         circles = []
-        batch_size = 100  # Larger batches for better performance
-        total_circles_needed = 2000  # Target number of circles
-        settling_steps = 20  # Reduced settling steps
+        batch_size = 50
+        batches = 0
+        max_batches = 40
         
-        # Pre-allocate space for circle positions
-        circle_positions = np.zeros((total_circles_needed, 2))
-        current_index = 0
+        # Dynamic settling iterations based on circle position
+        base_settling_iterations = 30
+        edge_settling_iterations = 45
         
-        while current_index < total_circles_needed:
+        while batches < max_batches:
             new_circles = self.add_circles_batch(batch_size)
+            circles.extend(new_circles)
             
-            # Batch physics updates
-            for _ in range(settling_steps):
-                self.space.step(1/30.0)  # Reduced precision for speed
+            # Count circles near edges for adaptive settling
+            edge_circles = sum(1 for circle, _ in new_circles 
+                            if self.is_near_number_edge(circle.body.position.x, 
+                                                    circle.body.position.y))
             
-            # Store only circles that are within bounds
-            for circle, radius in new_circles:
-                pos = circle.body.position
-                if self.is_inside_main_circle(pos.x, pos.y):
-                    circles.append((circle, radius))
-                    circle_positions[current_index] = [pos.x, pos.y]
-                    current_index += 1
-                    if current_index >= total_circles_needed:
-                        break
+            # Adjust settling iterations based on edge circle ratio
+            edge_ratio = edge_circles / len(new_circles)
+            settling_iterations = int(base_settling_iterations + 
+                                    (edge_settling_iterations - base_settling_iterations) * edge_ratio)
+            
+            # More iterations where needed
+            for _ in range(settling_iterations):
+                self.space.step(1/60.0)
+                
+                # Apply additional forces to circles near edges
+                for circle, radius in new_circles:
+                    pos = circle.body.position
+                    if self.is_near_number_edge(pos.x, pos.y):
+                        # Add a small attractive force toward the nearest number edge
+                        center_angle = math.atan2(self.center_y - pos.y, 
+                                                self.center_x - pos.x)
+                        
+                        # Vary force based on position
+                        base_force = 100.0
+                        if self.is_inside_number(pos.x, pos.y):
+                            force = base_force * 0.7  # Weaker force inside number
+                        else:
+                            force = base_force * 1.2  # Stronger force outside number
+                        
+                        circle.body.apply_force_at_local_point((
+                            math.cos(center_angle) * force,
+                            math.sin(center_angle) * force
+                        ))
+            
+            batches += 1
         
-        # Final quick settling
-        for _ in range(60):  # Reduced final settling time
-            self.space.step(1/30.0)
+        # Final settling phase with adaptive timing
+        edge_circle_count = sum(1 for circle, _ in circles 
+                            if self.is_near_number_edge(circle.body.position.x, 
+                                                        circle.body.position.y))
+        final_settling_time = int(120 + (edge_circle_count / len(circles)) * 60)
+        
+        for _ in range(final_settling_time):
+            self.space.step(1/60.0)
         
         return circles
-
 
     def is_near_number_edge(self, x, y, threshold=2):
         """
