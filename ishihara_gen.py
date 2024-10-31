@@ -111,15 +111,27 @@ class IshiharaPlateGenerator:
     
 
     def is_inside_number(self, x, y):
-        """Optimized number boundary checking"""
-        # Convert to grid coordinates using pre-computed transforms
-        grid_x = int((x - self.number_x) / self.x_scale)
-        grid_y = int((y - self.number_y) / self.y_scale)
-        
-        if 0 <= grid_x < self.bin_num.shape[1] and 0 <= grid_y < self.bin_num.shape[0]:
+        """
+        Convert coordinates to number grid space
+        """
+        # Convert coordinates to number grid space
+        grid_size = self.bin_num.shape
+        number_width = self.main_circle_radius * 1.4   # Made slightly larger
+        number_height = self.main_circle_radius * 1.4
+
+        # Center the number with slight upward shift
+        number_x = self.center_x - number_width/2
+        number_y = self.center_y - number_height/2 - self.main_circle_radius * 0.1
+
+        # Convert point to grid coordinates
+        grid_x = int((x - number_x) / (number_width / grid_size[1]))
+        grid_y = int((y - number_y) / (number_height / grid_size[0]))
+
+        # Check if point is inside grid and is part of number
+        if 0 <= grid_x < grid_size[1] and 0 <= grid_y < grid_size[0]:
             return self.bin_num[grid_y, grid_x] == 1
         return False
-  
+    
 
     def add_circles_batch(self, num_circles):
         """Modified circle placement that accounts for ring space"""
