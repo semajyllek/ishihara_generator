@@ -2,6 +2,4 @@ pymunk
 pillow
 pygame
 numpy
-colorspacious
 colorharmonies
-

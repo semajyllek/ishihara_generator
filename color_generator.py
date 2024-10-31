@@ -1,57 +1,32 @@
 # color_generator.py
-from colorspacious import cspace_converter
-from colorspacious.cvd import simulate_cvd
-from colorharmonies import Color, MonochromaticColor
+from colorharmonies import Color, MonochromaticColor, ComplementaryColor
 import numpy as np
 
 class ColorPaletteGenerator:
-    def __init__(self):
-        self.lab_to_rgb = cspace_converter("CAM02-UCS", "sRGB1")
-        self.rgb_to_lab = cspace_converter("sRGB1", "CAM02-UCS")
-
-    def simulate_deuteranopia(self, rgb):
-        """Simulate how color appears to someone with deuteranopia"""
-        return simulate_cvd(rgb, "deuteranopia", severity=1.0)
-
     def generate_background_palette(self, base_hue, num_colors=10):
         colors = []
-        base_color = Color(HSL=(base_hue, 0.8, 0.6))
+        # Use higher saturation and lightness for background
+        base_color = Color(HSL=(base_hue, 0.7, 0.65))
+        
+        # Generate monochromatic variations
         variations = MonochromaticColor(base_color, num_colors)
         
         for color in variations:
-            rgb = np.array(color.rgb)
-            # Check visibility for deuteranopes
-            deuter_rgb = self.simulate_deuteranopia(rgb)
-            
-            lab = self.rgb_to_lab(rgb)
-            lab[0] += np.random.uniform(-10, 10)
-            lab[1] *= 1.2
-            rgb_adjusted = self.lab_to_rgb(lab)
-            rgb_adjusted = np.clip(rgb_adjusted, 0, 1)
-            colors.append(rgb_adjusted)
-            
-        return [self.rgb_to_hex(color) for color in colors]
+            colors.append(self.rgb_to_hex(color.rgb))
+        return colors
 
     def generate_figure_palette(self, background_hue, num_colors=10):
+        # Use complementary color for maximum contrast
         figure_hue = (background_hue + 180) % 360
         
         colors = []
-        base_color = Color(HSL=(figure_hue, 0.9, 0.5))
+        # Use higher saturation and lower lightness for figure
+        base_color = Color(HSL=(figure_hue, 0.8, 0.45))
         variations = MonochromaticColor(base_color, num_colors)
         
         for color in variations:
-            rgb = np.array(color.rgb)
-            # Check visibility for deuteranopes
-            deuter_rgb = self.simulate_deuteranopia(rgb)
-            
-            lab = self.rgb_to_lab(rgb)
-            lab[0] += np.random.uniform(-5, 5)
-            lab[1] *= 1.3
-            rgb_adjusted = self.lab_to_rgb(lab)
-            rgb_adjusted = np.clip(rgb_adjusted, 0, 1)
-            colors.append(rgb_adjusted)
-            
-        return [self.rgb_to_hex(color) for color in colors]
+            colors.append(self.rgb_to_hex(color.rgb))
+        return colors
 
     @staticmethod
     def rgb_to_hex(rgb):
@@ -64,11 +39,12 @@ class ColorPaletteGenerator:
 def generate_ishihara_palette():
     color_gen = ColorPaletteGenerator()
     
+    # Define themes optimized for deuteranopia testing
     themes = [
-        {'hue': 30, 'name': 'warm_orange'},  # Orange
-        {'hue': 0, 'name': 'warm_red'},      # Red
-        {'hue': 280, 'name': 'cool_purple'}, # Purple
-        {'hue': 45, 'name': 'warm_yellow'},  # Yellow
+        {'hue': 30, 'name': 'warm_orange'},    # Orange background with blue-green figures
+        {'hue': 15, 'name': 'warm_coral'},     # Coral background with blue figures
+        {'hue': 45, 'name': 'warm_yellow'},    # Yellow background with blue-purple figures
+        {'hue': 200, 'name': 'cool_blue'},     # Blue background with orange figures
     ]
     
     theme = np.random.choice(themes)
