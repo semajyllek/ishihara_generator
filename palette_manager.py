@@ -5,6 +5,13 @@ import random
 import yaml
 
 
+import os
+
+# Get the directory containing the current script
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Use os.path.join to create the full path to palettes.yaml
+PALETTE_PATH = os.path.join(current_dir, 'palettes.yaml')
 
 
 
@@ -31,7 +38,7 @@ class Palette:
     metadata: Metadata
 
 class PaletteManager:
-    def __init__(self, palette_file: str = 'palettes.yaml'):
+    def __init__(self, palette_file: str = PALETTE_PATH):
         self.palette_file = Path(palette_file)
         self.palettes: Dict[str, Palette] = {}
         self.load_palettes()
