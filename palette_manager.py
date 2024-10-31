@@ -42,8 +42,8 @@ class PaletteManager:
     def load_palettes(self):
         """Load palettes from YAML file"""
 
-        print(f"Looking for palette file at: {PALETTE_PATH}")
-        
+        print(f"Looking for palette file at: {PALETTE_PATH}, {self.palette_file=}")
+
         with open(self.palette_file, 'r') as f:
             data = yaml.safe_load(f)
             
