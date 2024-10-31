@@ -68,7 +68,7 @@ class IshiharaPlateGenerator:
 
         # creates binary grids with stylistic integer masks
         self.renderer = DigitRenderer(font_size=FONT_SIZE, debug=True)
-        self.bin_num = self.renderer.digit_to_grid(digit=number, size=(GRID_SIZE, GRID_SIZE))
+        self.bin_num = self.renderer.digit_to_grid(digit=num, size=GRID_SIZE)
 
     def get_next_background_color(self):
         color = self.background_colors[self.current_bg_color_index]
