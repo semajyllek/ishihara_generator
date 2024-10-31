@@ -18,7 +18,7 @@ from typing import Optional
 import random
 
 from .color_generator import generate_ishihara_palette
-from .inttogrid import generate_binary_image_with_font, get_damion_tff
+from .inttogrid import DigitRenderer, get_tff
 
 # Fixed constants for circle sizes
 LARGE_CIRCLE_DIAMETER = 800  # pixels
@@ -28,15 +28,17 @@ GRID_SIZE = 20
 FONT_SIZE = 128
 DEMO_NUMBER = 5
 
+FONT_URL = 'https://www.1001fonts.com/download/buffalo-nickel.zip'
+
+
 
 class IshiharaPlateGenerator:
-    def __init__(self, num: int = DEMO_NUMBER, font_path: Optional[str] = None):
+    def __init__(self, num: int = DEMO_NUMBER):
 
         # creates binary grids with stylistic integer mask
-        if font_path is None:
-            font_path = get_damion_tff()
+        self.renderer = DigitRenderer(font_size=FONT_SIZE, font_path=get_tff(FONT_URL))
+        self.bin_num = self.renderer.digit_to_grid(digit=num, size=GRID_SIZE)
 
-        self.bin_num = generate_binary_image_with_font(num=num, font_path=font_path, size=GRID_SIZE)
         
         # circle sizes and positions
         self.main_circle_radius = LARGE_CIRCLE_DIAMETER // 2
