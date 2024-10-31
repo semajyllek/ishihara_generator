@@ -35,7 +35,7 @@ class Palette:
 
 class PaletteManager:
     def __init__(self, palette_file: str = PALETTE_PATH):
-        self.palette_file = Path(palette_file)
+        self.palette_file = palette_file
         self.palettes: Dict[str, Palette] = {}
         self.load_palettes()
 
