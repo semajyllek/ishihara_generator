@@ -130,40 +130,208 @@ class IshiharaPlateGenerator:
             return self.bin_num[grid_y, grid_x] == 1
         return False
     
+
     def add_circles_batch(self, num_circles):
-        """Modified circle placement that accounts for ring space"""
+        """Enhanced circle placement with better coverage"""
         circles = []
         golden_ratio = (1 + 5 ** 0.5) / 2
         
+        # Add more variation in circle placement
         for i in range(num_circles):
             radius = random.choice(self.small_circle_radii)
-            
-            # Add extra space for the white ring
-            ring_space = radius * 0.08  # Same as visual ring thickness
+            ring_space = radius * 0.08
             physics_radius = radius + ring_space
             
+            # Improved spiral placement with random offset
             angle = i * golden_ratio * 2 * math.pi
-            r = random.uniform(0, self.rect_width * 0.45)
+            base_r = (i / num_circles) * self.rect_width * 0.45
+            r = base_r + random.uniform(-20, 20)  # Add some randomness
             
-            x = self.center_x + r * math.cos(angle)
-            y = self.center_y - self.rect_height//2 + random.uniform(-50, 0)
+            # Try multiple positions for better coverage
+            best_x = self.center_x
+            best_y = self.center_y
+            best_coverage = 0
+            
+            for _ in range(3):  # Try 3 different positions
+                test_x = self.center_x + r * math.cos(angle + random.uniform(-0.2, 0.2))
+                test_y = self.center_y - self.rect_height//2 + random.uniform(-50, 50)
+                
+                coverage = self.evaluate_position_coverage(test_x, test_y, radius)
+                if coverage > best_coverage:
+                    best_coverage = coverage
+                    best_x = test_x
+                    best_y = test_y
             
             mass = 1.0
             moment = pymunk.moment_for_circle(mass, 0, physics_radius)
             body = pymunk.Body(mass, moment)
-            body.position = x, y
+            body.position = best_x, best_y
             
-            # Use the larger radius for collision detection
             shape = pymunk.Circle(body, physics_radius)
             shape.friction = 0.7
             shape.elasticity = 0.1
             shape.collision_type = 1
             
             self.space.add(body, shape)
-            # Store the visual radius (without ring space) for drawing
             circles.append((shape, radius))
         
         return circles
+
+    def evaluate_position_coverage(self, x, y, radius):
+        """Evaluate how well a position contributes to number coverage"""
+        score = 0
+        check_points = 8  # Number of points to check around the circle
+        
+        for i in range(check_points):
+            angle = (i / check_points) * 2 * math.pi
+            check_x = x + radius * math.cos(angle)
+            check_y = y + radius * math.sin(angle)
+            
+            # Check if point is inside number and not already well-covered
+            if self.is_inside_number(check_x, check_y):
+                score += 1
+                # Bonus for being near edge
+                if self.is_near_number_edge(check_x, check_y):
+                    score += 0.5
+            
+        return score
+
+    def run_physics_simulation(self):
+        """Enhanced physics simulation with adaptive circle placement"""
+        circles = []
+        batch_size = 50
+        max_batches = 50  # Increased from 40
+        coverage_threshold = 0.85  # Target coverage ratio
+        
+        # Track areas that need more circles
+        uncovered_regions = set()
+        
+        for batch in range(max_batches):
+            # Analyze current coverage
+            coverage = self.analyze_coverage(circles)
+            if coverage >= coverage_threshold:
+                break
+                
+            # Adjust batch placement based on coverage analysis
+            if batch > max_batches // 2:
+                # Focus on filling gaps in later batches
+                new_circles = self.add_targeted_circles_batch(batch_size // 2, uncovered_regions)
+            else:
+                new_circles = self.add_circles_batch(batch_size)
+                
+            circles.extend(new_circles)
+            
+            # Run physics simulation with adaptive settling
+            settling_iterations = self.calculate_settling_iterations(new_circles)
+            for _ in range(settling_iterations):
+                self.space.step(1/60.0)
+                self.apply_coverage_forces(new_circles)
+            
+            # Update uncovered regions
+            uncovered_regions = self.find_uncovered_regions(circles)
+        
+        # Final settling phase
+        final_iterations = 60 + len(circles) // 10
+        for _ in range(final_iterations):
+            self.space.step(1/60.0)
+        
+        return circles
+
+    def analyze_coverage(self, circles):
+        """Analyze current coverage of the number"""
+        grid_size = 20
+        covered_points = set()
+        total_points = 0
+        
+        for y in range(grid_size):
+            for x in range(grid_size):
+                if self.bin_num[y, x]:
+                    total_points += 1
+                    point_x = self.number_x + (x + 0.5) * (self.number_width / grid_size)
+                    point_y = self.number_y + (y + 0.5) * (self.number_height / grid_size)
+                    
+                    for circle, radius in circles:
+                        pos = circle.body.position
+                        if (pos.x - point_x) ** 2 + (pos.y - point_y) ** 2 <= radius ** 2:
+                            covered_points.add((x, y))
+                            break
+        
+        return len(covered_points) / total_points if total_points > 0 else 0
+
+    def find_uncovered_regions(self, circles):
+        """Find regions that need more coverage"""
+        uncovered = set()
+        grid_size = 20
+        
+        for y in range(grid_size):
+            for x in range(grid_size):
+                if self.bin_num[y, x]:
+                    point_x = self.number_x + (x + 0.5) * (self.number_width / grid_size)
+                    point_y = self.number_y + (y + 0.5) * (self.number_height / grid_size)
+                    
+                    is_covered = False
+                    for circle, radius in circles:
+                        pos = circle.body.position
+                        if (pos.x - point_x) ** 2 + (pos.y - point_y) ** 2 <= radius ** 2:
+                            is_covered = True
+                            break
+                    
+                    if not is_covered:
+                        uncovered.add((point_x, point_y))
+        
+        return uncovered
+
+    def add_targeted_circles_batch(self, num_circles, uncovered_regions):
+        """Add circles specifically targeting uncovered regions"""
+        circles = []
+        uncovered_list = list(uncovered_regions)
+        
+        for _ in range(num_circles):
+            if not uncovered_list:
+                break
+                
+            target = random.choice(uncovered_list)
+            radius = random.choice(self.small_circle_radii)
+            ring_space = radius * 0.08
+            physics_radius = radius + ring_space
+            
+            mass = 1.0
+            moment = pymunk.moment_for_circle(mass, 0, physics_radius)
+            body = pymunk.Body(mass, moment)
+            
+            # Add some randomness to prevent exact stacking
+            body.position = (
+                target[0] + random.uniform(-radius/2, radius/2),
+                target[1] + random.uniform(-radius/2, radius/2)
+            )
+            
+            shape = pymunk.Circle(body, physics_radius)
+            shape.friction = 0.7
+            shape.elasticity = 0.1
+            shape.collision_type = 1
+            
+            self.space.add(body, shape)
+            circles.append((shape, radius))
+        
+        return circles
+
+    def apply_coverage_forces(self, circles):
+        """Apply forces to improve coverage"""
+        for circle, radius in circles:
+            pos = circle.body.position
+            if self.is_inside_number(pos.x, pos.y):
+                # Apply gentle force toward uncovered nearby areas
+                for angle in range(0, 360, 45):
+                    rad = math.radians(angle)
+                    check_x = pos.x + radius * 2 * math.cos(rad)
+                    check_y = pos.y + radius * 2 * math.sin(rad)
+                    
+                    if self.is_inside_number(check_x, check_y):
+                        force_mag = 50.0
+                        circle.body.apply_force_at_local_point((
+                            math.cos(rad) * force_mag,
+                            math.sin(rad) * force_mag
+                        ))
 
     def draw_circle_with_gradient(self, draw, pos, radius, color):
         """Draw a non-overlapping circle with white ring"""
@@ -194,67 +362,8 @@ class IshiharaPlateGenerator:
             ], fill=color)
 
 
-    def run_physics_simulation(self):
-        """Enhanced physics simulation with density-aware settling"""
-        circles = []
-        batch_size = 50
-        batches = 0
-        max_batches = 40
-        
-        # Dynamic settling iterations based on circle position
-        base_settling_iterations = 30
-        edge_settling_iterations = 45
-        
-        while batches < max_batches:
-            new_circles = self.add_circles_batch(batch_size)
-            circles.extend(new_circles)
-            
-            # Count circles near edges for adaptive settling
-            edge_circles = sum(1 for circle, _ in new_circles 
-                            if self.is_near_number_edge(circle.body.position.x, 
-                                                    circle.body.position.y))
-            
-            # Adjust settling iterations based on edge circle ratio
-            edge_ratio = edge_circles / len(new_circles)
-            settling_iterations = int(base_settling_iterations + 
-                                    (edge_settling_iterations - base_settling_iterations) * edge_ratio)
-            
-            # More iterations where needed
-            for _ in range(settling_iterations):
-                self.space.step(1/60.0)
-                
-                # Apply additional forces to circles near edges
-                for circle, radius in new_circles:
-                    pos = circle.body.position
-                    if self.is_near_number_edge(pos.x, pos.y):
-                        # Add a small attractive force toward the nearest number edge
-                        center_angle = math.atan2(self.center_y - pos.y, 
-                                                self.center_x - pos.x)
-                        
-                        # Vary force based on position
-                        base_force = 100.0
-                        if self.is_inside_number(pos.x, pos.y):
-                            force = base_force * 0.7  # Weaker force inside number
-                        else:
-                            force = base_force * 1.2  # Stronger force outside number
-                        
-                        circle.body.apply_force_at_local_point((
-                            math.cos(center_angle) * force,
-                            math.sin(center_angle) * force
-                        ))
-            
-            batches += 1
-        
-        # Final settling phase with adaptive timing
-        edge_circle_count = sum(1 for circle, _ in circles 
-                            if self.is_near_number_edge(circle.body.position.x, 
-                                                        circle.body.position.y))
-        final_settling_time = int(120 + (edge_circle_count / len(circles)) * 60)
-        
-        for _ in range(final_settling_time):
-            self.space.step(1/60.0)
-        
-        return circles
+ 
+
 
     def is_near_number_edge(self, x, y, threshold=2):
         """
