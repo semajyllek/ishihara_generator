@@ -102,7 +102,7 @@ class IshiharaPlateGenerator:
 
         # Check if point is inside grid and is part of number
         if 0 <= grid_x < grid_size[1] and 0 <= grid_y < grid_size[0]:
-            return NUMBER_FIVE[grid_y, grid_x] == 1
+            return self.bin_num[grid_y, grid_x] == 1
         return False
 
     def create_boundary(self):
