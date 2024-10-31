@@ -41,13 +41,6 @@ class IshiharaPlateGenerator:
         # creates binary grids with stylistic integer mask
         self.renderer = DigitRenderer(font_size=FONT_SIZE, font_path=get_tff(font_zip_url))
         self.bin_num = self.renderer.digit_to_grid(digit=num, size=GRID_SIZE)
-
-         # Pre-compute the dilated number mask for faster edge checking
-        self.dilated_mask = binary_dilation(self.bin_num, iterations=2)
-        
-        # Pre-compute the transformed coordinates for number checking
-        self.setup_number_transform()
-
         
         # circle sizes and positions
         self.main_circle_radius = LARGE_CIRCLE_DIAMETER // 2
@@ -82,6 +75,13 @@ class IshiharaPlateGenerator:
         
         self.current_bg_color_index = 0
         self.current_fg_color_index = 0
+
+
+        # Pre-compute the dilated number mask for faster edge checking
+        self.dilated_mask = binary_dilation(self.bin_num, iterations=2)
+        
+        # Pre-compute the transformed coordinates for number checking
+        self.setup_number_transform()
 
         self.create_boundary()
 
