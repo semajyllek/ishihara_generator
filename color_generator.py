@@ -6,7 +6,7 @@ class ColorPaletteGenerator:
     def generate_background_palette(self, base_hue, num_colors=10):
         colors = []
         # Create base color with high saturation and medium lightness
-        base_color = Color(HSL=(base_hue, 0.7, 0.65))
+        base_color = Color(hsl=(base_hue/360, 0.7, 0.65))  # Note: hue needs to be 0-1
         colors.append(base_color)
         
         # Generate variations spreading around the base hue
@@ -16,9 +16,9 @@ class ColorPaletteGenerator:
         for i in range(num_colors - 1):
             # Alternate between plus and minus from base hue
             if i % 2 == 0:
-                hue_variation = (base_hue + step * (i//2)) % 360
+                hue_variation = ((base_hue + step * (i//2)) % 360) / 360  # Convert to 0-1
             else:
-                hue_variation = (base_hue - step * (i//2)) % 360
+                hue_variation = ((base_hue - step * (i//2)) % 360) / 360  # Convert to 0-1
                 
             # Vary saturation and lightness slightly
             saturation = 0.7 + np.random.uniform(-0.1, 0.1)
@@ -28,7 +28,7 @@ class ColorPaletteGenerator:
             saturation = np.clip(saturation, 0.5, 0.9)
             lightness = np.clip(lightness, 0.5, 0.8)
             
-            new_color = Color(HSL=(hue_variation, saturation, lightness))
+            new_color = Color(hsl=(hue_variation, saturation, lightness))
             colors.append(new_color)
             
         return [self.rgb_to_hex(color.rgb) for color in colors]
@@ -39,7 +39,7 @@ class ColorPaletteGenerator:
         figure_hue = (background_hue + 180) % 360
         
         # Create base complementary color
-        base_color = Color(HSL=(figure_hue, 0.8, 0.45))
+        base_color = Color(hsl=(figure_hue/360, 0.8, 0.45))
         colors.append(base_color)
         
         # Generate variations
@@ -48,9 +48,9 @@ class ColorPaletteGenerator:
         
         for i in range(num_colors - 1):
             if i % 2 == 0:
-                hue_variation = (figure_hue + step * (i//2)) % 360
+                hue_variation = ((figure_hue + step * (i//2)) % 360) / 360
             else:
-                hue_variation = (figure_hue - step * (i//2)) % 360
+                hue_variation = ((figure_hue - step * (i//2)) % 360) / 360
                 
             saturation = 0.8 + np.random.uniform(-0.1, 0.1)
             lightness = 0.45 + np.random.uniform(-0.1, 0.1)
@@ -59,7 +59,7 @@ class ColorPaletteGenerator:
             saturation = np.clip(saturation, 0.6, 0.9)
             lightness = np.clip(lightness, 0.3, 0.6)
             
-            new_color = Color(HSL=(hue_variation, saturation, lightness))
+            new_color = Color(hsl=(hue_variation, saturation, lightness))
             colors.append(new_color)
             
         return [self.rgb_to_hex(color.rgb) for color in colors]
@@ -75,7 +75,6 @@ class ColorPaletteGenerator:
 def generate_ishihara_palette():
     color_gen = ColorPaletteGenerator()
     
-    # Define themes optimized for deuteranopia testing
     themes = [
         {'hue': 30, 'name': 'warm_orange'},    # Orange background with blue-green figures
         {'hue': 15, 'name': 'warm_coral'},     # Coral background with blue figures
