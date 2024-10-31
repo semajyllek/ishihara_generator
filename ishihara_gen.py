@@ -136,76 +136,67 @@ class IshiharaPlateGenerator:
         return False
 
     def add_circles_batch(self, num_circles):
-        """Modified circle placement with proper density control"""
+        """Modified circle placement that accounts for ring space"""
         circles = []
         golden_ratio = (1 + 5 ** 0.5) / 2
-        
-        # Density control parameters
-        base_density_multiplier = 1.2  # Increase density near number edges
-        edge_density_multiplier = 1.5  # Even higher density right at edges
         
         for i in range(num_circles):
             radius = random.choice(self.small_circle_radii)
             
-            # Use golden ratio for initial placement
+            # Add extra space for the white ring
+            ring_space = radius * 0.08  # Same as visual ring thickness
+            physics_radius = radius + ring_space
+            
             angle = i * golden_ratio * 2 * math.pi
             r = random.uniform(0, self.rect_width * 0.45)
             
             x = self.center_x + r * math.cos(angle)
             y = self.center_y - self.rect_height//2 + random.uniform(-50, 0)
             
-            # Check if we're near a number edge
-            near_edge = self.is_near_number_edge(x, y)
-            
-            # Adjust circle properties based on position
-            if near_edge:
-                # Increase number of circles near edges by potentially adding more
-                if random.random() < (edge_density_multiplier - 1):
-                    # Add an additional nearby circle
-                    offset = radius * 0.8
-                    x_offset = x + random.uniform(-offset, offset)
-                    y_offset = y + random.uniform(-offset, offset)
-                    
-                    mass = 0.7  # Lighter mass for better edge packing
-                    moment = pymunk.moment_for_circle(mass, 0, radius * 0.9)  # Slightly smaller
-                    body = pymunk.Body(mass, moment)
-                    body.position = x_offset, y_offset
-                    
-                    shape = pymunk.Circle(body, radius * 0.85)  # Smaller collision radius
-                    shape.friction = 0.7
-                    shape.elasticity = 0.05  # Less bounce for better settling
-                    shape.collision_type = 1
-                    
-                    self.space.add(body, shape)
-                    circles.append((shape, radius * 0.9))
-                
-                # Original circle with edge properties
-                mass = 0.8
-                collision_radius = radius * 0.9
-            else:
-                # Check if we're in the general number area
-                in_number = self.is_inside_number(x, y)
-                if in_number:
-                    mass = 1.0 * base_density_multiplier
-                    collision_radius = radius * 0.95
-                else:
-                    mass = 1.0
-                    collision_radius = radius - 0.5
-            
-            # Create the main circle
-            moment = pymunk.moment_for_circle(mass, 0, radius)
+            mass = 1.0
+            moment = pymunk.moment_for_circle(mass, 0, physics_radius)
             body = pymunk.Body(mass, moment)
             body.position = x, y
             
-            shape = pymunk.Circle(body, collision_radius)
+            # Use the larger radius for collision detection
+            shape = pymunk.Circle(body, physics_radius)
             shape.friction = 0.7
-            shape.elasticity = 0.1 if not near_edge else 0.05
+            shape.elasticity = 0.1
             shape.collision_type = 1
             
             self.space.add(body, shape)
+            # Store the visual radius (without ring space) for drawing
             circles.append((shape, radius))
         
         return circles
+
+    def draw_circle_with_gradient(self, draw, pos, radius, color):
+        """Draw a non-overlapping circle with white ring"""
+        try:
+            # White background circle (ring)
+            draw.ellipse([
+                pos.x - radius - radius * 0.08,  # Add 8% for ring
+                pos.y - radius - radius * 0.08,
+                pos.x + radius + radius * 0.08,
+                pos.y + radius + radius * 0.08
+            ], fill='white')
+            
+            # Main colored circle
+            draw.ellipse([
+                pos.x - radius,
+                pos.y - radius,
+                pos.x + radius,
+                pos.y + radius
+            ], fill=color)
+            
+        except Exception as e:
+            # Fallback to simple circle if drawing fails
+            draw.ellipse([
+                pos.x - radius,
+                pos.y - radius,
+                pos.x + radius,
+                pos.y + radius
+            ], fill=color)
 
     def run_physics_simulation(self):
         """Enhanced physics simulation with density-aware settling"""
@@ -354,36 +345,6 @@ class IshiharaPlateGenerator:
         # Sort by angle and distance for more pleasing distribution
         circle_regions.sort(key=lambda x: (x[2], x[3]))
         return circle_regions
-
-        
-    def draw_circle_with_gradient(self, draw, pos, radius, color):
-        """Draw a single circle with white ring that shows even with overlap"""
-        try:
-            # Main circle
-            draw.ellipse([
-                pos.x - radius,
-                pos.y - radius,
-                pos.x + radius,
-                pos.y + radius
-            ], fill=color)
-            
-            # Draw white ring outline on top
-            ring_thickness = max(1, radius * 0.08)  # 8% of radius, minimum 1 pixel
-            draw.ellipse([
-                pos.x - radius - ring_thickness,
-                pos.y - radius - ring_thickness,
-                pos.x + radius + ring_thickness,
-                pos.y + radius + ring_thickness
-            ], fill=None, outline='white', width=max(1, int(ring_thickness)))
-            
-        except Exception as e:
-            # Fallback to simple circle if drawing fails
-            draw.ellipse([
-                pos.x - radius,
-                pos.y - radius,
-                pos.x + radius,
-                pos.y + radius
-            ], fill=color)
 
 
     def add_subtle_texture(self, img):
