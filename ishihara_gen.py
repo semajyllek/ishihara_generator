@@ -18,7 +18,7 @@ from typing import Optional
 import random
 
 from .color_generator import generate_ishihara_palette
-from .inttogrid import DigitRenderer
+from .inttogrid import generate_binary_image_with_font
 
 # Fixed constants for circle sizes
 LARGE_CIRCLE_DIAMETER = 800  # pixels
@@ -33,9 +33,7 @@ class IshiharaPlateGenerator:
     def __init__(self, num: int = DEMO_NUMBER):
 
         # creates binary grids with stylistic integer mask
-        self.renderer = DigitRenderer(font_size=FONT_SIZE, debug=True)
-        self.bin_num = self.renderer.digit_to_grid(digit=num, size=GRID_SIZE)
-
+        self.bin_num = generate_binary_image_with_font(num=num, size=GRID_SIZE)
         
         # circle sizes and positions
         self.main_circle_radius = LARGE_CIRCLE_DIAMETER // 2
