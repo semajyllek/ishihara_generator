@@ -31,7 +31,7 @@ DEMO_NUMBER = 5
 
 
 class IshiharaPlateGenerator:
-    def __init__(self, palette_manager: Optional[PaletteManager] = None, number: int = DEMO_NUMBER):
+    def __init__(self, palette_manager: Optional[PaletteManager] = None, num: int = DEMO_NUMBER):
         
         self.main_circle_radius = LARGE_CIRCLE_DIAMETER // 2
         self.small_circle_radii = [d // 2 for d in SMALL_CIRCLE_DIAMETERS]
@@ -316,9 +316,9 @@ class IshiharaPlateGenerator:
 
 
 # api
-def generate_ishihara_plate(n: int = 5):
+def generate_ishihara_plate(num: int = 5):
     palette_manager = PaletteManager()
-    generator = IshiharaPlateGenerator(palette_manager)
+    generator = IshiharaPlateGenerator(palette_manager, num=n)
     image, circles = generator.generate_plate()
     return image, circles
 
