@@ -38,6 +38,9 @@ class PaletteManager:
         # If no path provided, use the default PALETTE_PATH
         self.palette_path = palette_path if palette_path is not None else PALETTE_PATH
         self.palettes: Dict[str, Palette] = {}
+
+        print(f"PALETTE_PATH in module: {PALETTE_PATH}")
+        print(f"self.palette_path after init: {self.palette_path}")
         self.load_palettes()
 
     def load_palettes(self):
