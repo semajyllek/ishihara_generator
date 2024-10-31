@@ -1,3 +1,9 @@
+import colorsys
+import numpy as np
+
+
+
+
 class ColorPaletteGenerator:
     def create_color(self, h, s, l):
         """Create a Color object with all required color spaces"""
