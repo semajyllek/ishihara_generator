@@ -313,7 +313,7 @@ class IshiharaPlateGenerator:
 
 # api
 def generate_ishihara_plate(n: int = 5):
-    palette_manager = PaletteManager('palettes.yaml')
+    palette_manager = PaletteManager()
     generator = IshiharaPlateGenerator(palette_manager)
     grid_size = (LARGE_CIRCLE_DIAMETER // 2) / 10
     bin_num = generator.renderer.digit_to_grid(number=n, size=grid_size)
