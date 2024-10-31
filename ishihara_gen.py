@@ -316,7 +316,154 @@ class IshiharaPlateGenerator:
         
         return None
     
+    def find_largest_fitting_circle(self, x, y, available_radii, placed_circles):
+        """Find the largest circle that fits at a given position"""
+        spacing = 1  # Minimum spacing between circles
+        
+        for radius in available_radii:
+            if not self.is_inside_main_circle(x, y):
+                continue
+                
+            fits = True
+            for (cx, cy), cr in placed_circles:
+                dist = math.sqrt((x - cx)**2 + (y - cy)**2)
+                if dist < (radius + cr + spacing):
+                    fits = False
+                    break
+                    
+            if fits:
+                return radius
+        
+        return None
 
+    def get_candidate_positions(self, placed_circles, radius):
+        """Generate candidate positions around existing circles"""
+        candidates = []
+        
+        if not placed_circles:
+            # Start with positions near the center
+            for angle in range(0, 360, 30):
+                rad = math.radians(angle)
+                x = self.center_x + math.cos(rad) * radius * 2
+                y = self.center_y + math.sin(rad) * radius * 2
+                candidates.append((x, y))
+            return candidates
+        
+        # Generate positions around existing circles
+        for (cx, cy), cr in placed_circles:
+            # Generate more positions around larger circles
+            step = max(10, int(360 / (cr * 0.5)))
+            for angle in range(0, 360, step):
+                rad = math.radians(angle)
+                # Try different distances from the circle
+                for distance_factor in [1.0, 1.2, 1.4]:
+                    x = cx + math.cos(rad) * (cr + radius) * distance_factor
+                    y = cy + math.sin(rad) * (cr + radius) * distance_factor
+                    candidates.append((x, y))
+        
+        return candidates
+
+    def fill_region(self, region_checker, grid, placed_circles, sizes_to_use):
+        """Fill a region using maximum circle size diversity"""
+        new_circles = []
+        attempted_positions = set()
+        
+        # Initial placement of larger circles
+        for radius in sizes_to_use[:3]:  # Start with largest sizes
+            candidates = self.get_candidate_positions(placed_circles + new_circles, radius)
+            random.shuffle(candidates)
+            
+            for x, y in candidates:
+                pos_key = (round(x/5), round(y/5))  # Round to reduce position duplicates
+                if pos_key in attempted_positions:
+                    continue
+                    
+                attempted_positions.add(pos_key)
+                if region_checker(x, y):
+                    if self.check_position(x, y, radius, grid, placed_circles + new_circles):
+                        new_circles.append(((x, y), radius))
+        
+        # Fill remaining spaces with smaller circles
+        max_circles = 1000  # Increased limit for better coverage
+        while len(new_circles) < max_circles:
+            # Get candidates around existing circles
+            all_current = placed_circles + new_circles
+            candidates = self.get_candidate_positions(all_current, min(sizes_to_use))
+            
+            # Try each candidate position
+            success = False
+            for x, y in candidates:
+                pos_key = (round(x/5), round(y/5))
+                if pos_key in attempted_positions:
+                    continue
+                    
+                attempted_positions.add(pos_key)
+                if not region_checker(x, y):
+                    continue
+                    
+                # Find largest circle that fits here
+                radius = self.find_largest_fitting_circle(x, y, sizes_to_use, all_current)
+                if radius:
+                    new_circles.append(((x, y), radius))
+                    success = True
+                    break
+            
+            if not success:
+                # If we can't place any more circles, try with smaller sizes
+                if len(sizes_to_use) > 1:
+                    sizes_to_use = sizes_to_use[1:]
+                else:
+                    break
+        
+        return new_circles
+
+    def pack_circles(self):
+        """Pack circles with improved size diversity"""
+        grid = self.create_packing_grid()
+        all_circles = []
+        
+        # Sort radii from largest to smallest
+        radii = sorted(self.small_circle_radii, reverse=True)
+        
+        # Pack the number region with full size diversity
+        number_circles = self.fill_region(
+            region_checker=self.is_inside_number,
+            grid=grid,
+            placed_circles=all_circles,
+            sizes_to_use=radii  # Use all sizes for better filling
+        )
+        all_circles.extend(number_circles)
+        
+        # Pack the background with full size diversity
+        background_checker = lambda x, y: (
+            self.is_inside_main_circle(x, y) and 
+            not self.is_inside_number(x, y)
+        )
+        
+        background_circles = self.fill_region(
+            region_checker=background_checker,
+            grid=grid,
+            placed_circles=all_circles,
+            sizes_to_use=radii  # Use all sizes for background too
+        )
+        all_circles.extend(background_circles)
+        
+        # Convert to physics bodies
+        circles = []
+        for (x, y), radius in all_circles:
+            body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
+            body.position = (x, y)
+            shape = pymunk.Circle(body, radius)
+            shape.friction = 0.9
+            shape.elasticity = 0.1
+            self.space.add(body, shape)
+            circles.append((shape, radius))
+        
+        return circles
+
+    def run_physics_simulation(self):
+        """Replace physics simulation with optimized packing"""
+        return self.pack_circles()
 
     def create_packing_grid(self):
         """Create a grid to track circle placement"""
@@ -351,106 +498,6 @@ class IshiharaPlateGenerator:
                 return False
                 
         return True
-
-    def fill_region(self, region_checker, grid, placed_circles, sizes_to_use):
-        """Fill a region (number or background) with circles"""
-        new_circles = []
-        attempt_grid = {}  # Track attempted positions
-        
-        # Create initial candidate positions around existing circles
-        candidates = []
-        
-        # If no circles placed yet, start with central position
-        if not placed_circles:
-            candidates.append((self.center_x, self.center_y))
-        
-        # Try each circle size multiple times
-        for radius in sizes_to_use:
-            attempts = 0
-            max_attempts = 1000
-            
-            while attempts < max_attempts:
-                # Generate candidate position
-                if candidates:
-                    base_x, base_y = random.choice(candidates)
-                    angle = random.uniform(0, 2 * math.pi)
-                    distance = random.uniform(radius * 2, radius * 3)
-                    x = base_x + math.cos(angle) * distance
-                    y = base_y + math.sin(angle) * distance
-                else:
-                    # Fallback to random position within main circle
-                    angle = random.uniform(0, 2 * math.pi)
-                    distance = random.uniform(0, self.main_circle_radius - radius)
-                    x = self.center_x + math.cos(angle) * distance
-                    y = self.center_y + math.sin(angle) * distance
-                
-                # Round to grid to avoid too many similar attempts
-                grid_x = round(x / (radius/2)) * (radius/2)
-                grid_y = round(y / (radius/2)) * (radius/2)
-                pos_key = (grid_x, grid_y, radius)
-                
-                if pos_key not in attempt_grid and region_checker(x, y):
-                    if self.check_position(x, y, radius, grid, placed_circles + new_circles):
-                        new_circles.append(((x, y), radius))
-                        candidates.append((x, y))
-                        
-                        # If we've placed enough circles, move to next size
-                        if len(new_circles) > 100:  # Adjust this threshold as needed
-                            break
-                    
-                    attempt_grid[pos_key] = True
-                
-                attempts += 1
-                
-        return new_circles
-
-    def pack_circles(self):
-        """Pack circles using grid-based approach"""
-        grid = self.create_packing_grid()
-        all_circles = []
-        
-        # Sort radii from largest to smallest
-        radii = sorted(self.small_circle_radii, reverse=True)
-        
-        # First pack the number region
-        number_circles = self.fill_region(
-            region_checker=self.is_inside_number,
-            grid=grid,
-            placed_circles=all_circles,
-            sizes_to_use=radii[:4]  # Use larger circles for number
-        )
-        all_circles.extend(number_circles)
-        
-        # Then pack the background
-        background_checker = lambda x, y: (
-            self.is_inside_main_circle(x, y) and 
-            not self.is_inside_number(x, y)
-        )
-        
-        background_circles = self.fill_region(
-            region_checker=background_checker,
-            grid=grid,
-            placed_circles=all_circles,
-            sizes_to_use=radii[2:]  # Use mix of sizes for background
-        )
-        all_circles.extend(background_circles)
-        
-        # Convert to physics bodies for consistency with existing code
-        circles = []
-        for (x, y), radius in all_circles:
-            body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
-            body.position = (x, y)
-            shape = pymunk.Circle(body, radius)
-            shape.friction = 0.9
-            shape.elasticity = 0.1
-            self.space.add(body, shape)
-            circles.append((shape, radius))
-        
-        return circles
-
-    def run_physics_simulation(self):
-        """Replace physics simulation with grid-based packing"""
-        return self.pack_circles()
 
 
 
