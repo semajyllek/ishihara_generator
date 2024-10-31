@@ -164,42 +164,32 @@ class IshiharaPlateGenerator:
 
     def draw_decorative_rings(self, draw):
         """Draw the decorative outer, main, and inner rings"""
-        # Bold black outer border
-        outer_ring_radius = self.main_circle_radius + 20
-        for i in range(3):  # Draw multiple circles for a bolder border
-            draw.ellipse([
-                self.center_x - outer_ring_radius - i,
-                self.center_y - outer_ring_radius - i,
-                self.center_x + outer_ring_radius + i,
-                self.center_y + outer_ring_radius + i
-            ], fill=None, outline='black', width=5)
-
-        # The rest remains the same
+        # Draw main background circle first
         draw.ellipse([
-            self.center_x - outer_ring_radius,
-            self.center_y - outer_ring_radius,
-            self.center_x + outer_ring_radius,
-            self.center_y + outer_ring_radius
-        ], fill=self.background_base, outline=self.border_color, width=3)
+            self.center_x - self.main_circle_radius,
+            self.center_y - self.main_circle_radius,
+            self.center_x + self.main_circle_radius,
+            self.center_y + self.main_circle_radius
+        ], fill=self.background_base)
         
-        # Main circle with gradient edge
-        for i in range(5):
+        # Draw bold black border right at the main circle's edge
+        for i in range(8):  # Increased number of lines
             draw.ellipse([
                 self.center_x - self.main_circle_radius - i,
                 self.center_y - self.main_circle_radius - i,
                 self.center_x + self.main_circle_radius + i,
                 self.center_y + self.main_circle_radius + i
-            ], fill=self.background_base, outline=self.border_color, width=1)
+            ], fill=None, outline='black', width=3)  # Increased width
         
-        # Inner ring
-        inner_ring_radius = self.main_circle_radius - 10
+        # Inner decorative ring
+        inner_ring_radius = self.main_circle_radius - 20
         draw.ellipse([
             self.center_x - inner_ring_radius,
             self.center_y - inner_ring_radius,
             self.center_x + inner_ring_radius,
             self.center_y + inner_ring_radius
-        ], fill=self.background_base, outline=self.border_color, width=2)
-
+        ], fill=None, outline=self.border_color, width=2)
+        
     def organize_circles_by_position(self, circles):
         """Group and sort circles by their position for better color distribution"""
         circle_regions = []
