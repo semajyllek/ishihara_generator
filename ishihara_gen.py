@@ -210,32 +210,63 @@ class IshiharaPlateGenerator:
         circle_regions.sort(key=lambda x: (x[2], x[3]))
         return circle_regions
 
+
     def draw_circle_with_gradient(self, draw, pos, radius, color):
         """Draw a single circle with subtle gradient effect"""
-        rgb = ImageColor.getrgb(color)
+        try:
+            rgb = ImageColor.getrgb(color)
+            
+            # Create darker and lighter versions
+            darker = tuple(int(c * 0.95) for c in rgb)
+            lighter = tuple(int(min(255, c * 1.05)) for c in rgb)
+            
+            # Main circle
+            draw.ellipse([
+                pos.x - radius,
+                pos.y - radius,
+                pos.x + radius,
+                pos.y + radius
+            ], fill=color)
+            
+            # Highlight
+            highlight_radius = radius * 0.7
+            draw.ellipse([
+                pos.x - highlight_radius,
+                pos.y - highlight_radius,
+                pos.x + highlight_radius * 0.8,
+                pos.y + highlight_radius * 0.8
+            ], fill=lighter)
+            
+        except Exception as e:
+            # Fallback to simple circle if gradient fails
+            draw.ellipse([
+                pos.x - radius,
+                pos.y - radius,
+                pos.x + radius,
+                pos.y + radius
+            ], fill=color)
+
+
+    def add_subtle_texture(self, img):
+        """Add subtle noise texture to the image"""
+        width, height = img.size
+        pixels = img.load()
         
-        # Create slightly darker and lighter versions
-        darker = tuple(int(c * 0.95) for c in rgb)
-        lighter = tuple(int(min(255, c * 1.05)) for c in rgb)
-        
-        # Draw concentric circles for gradient effect
-        draw.ellipse([
-            pos.x - radius,
-            pos.y - radius,
-            pos.x + radius,
-            pos.y + radius
-        ], fill=color)
-        
-        # Add subtle highlight
-        draw.ellipse([
-            pos.x - radius * 0.8,
-            pos.y - radius * 0.8,
-            pos.x + radius * 0.6,
-            pos.y + radius * 0.6
-        ], fill=ImageColor.getrgb(lighter))
+        for x in range(width):
+            for y in range(height):
+                if isinstance(pixels[x, y], int):  # Handle grayscale images
+                    continue
+                r, g, b = pixels[x, y][:3]
+                noise = random.randint(-5, 5)
+                pixels[x, y] = (
+                    max(0, min(255, r + noise)),
+                    max(0, min(255, g + noise)),
+                    max(0, min(255, b + noise))
+                )
+
 
     def draw_circles(self, circles_draw, circle_regions):
-        """Draw all circles with artistic color distribution"""
+        """Draw all circles with enhanced visual effects"""
         for circle, radius, angle, dist in circle_regions:
             pos = circle.body.position
             if self.is_inside_main_circle(pos.x, pos.y):
@@ -243,9 +274,8 @@ class IshiharaPlateGenerator:
                     base_color = self.get_next_figure_color()
                 else:
                     base_color = self.get_next_background_color()
-
-                color = self.adjust_color(base_color, angle, dist)
-                self.draw_circle_with_gradient(circles_draw, pos, radius, color)
+                
+                self.draw_circle_with_gradient(circles_draw, pos, radius, base_color)
 
 
     def draw_base_circle(self, draw):
@@ -290,32 +320,27 @@ class IshiharaPlateGenerator:
         """Get only the circles that are inside the main circle"""
         return [(c, r) for c, r in circles 
                 if self.is_inside_main_circle(c.body.position.x, c.body.position.y)]
-
+    
     def generate_plate(self):
-        """Main method to generate the Ishihara plate"""
-        # Run physics simulation
-        circles = self.run_physics_simulation()
+        # Adjust physics parameters for better spacing
+        self.space.iterations = 50
+        self.space.collision_slop = 0.001
         
-        # Create images and drawing objects
+        circles = self.run_physics_simulation()
         img, mask, mask_draw, circles_img, circles_draw = self.create_initial_images()
         
-        # Draw base elements
         self.draw_base_circle(circles_draw)
-        
-        # Create mask
         self.create_circle_mask(mask_draw)
         
-        # Draw all circles
         circle_regions = self.organize_circles_by_position(circles)
         self.draw_circles(circles_draw, circle_regions)
         
-        # Combine layers
-        img.paste(circles_img, (0, 0), mask)
+        # Add texture before final composition
+        self.add_subtle_texture(circles_img)
         
-        # Draw border on top
+        img.paste(circles_img, (0, 0), mask)
         self.draw_bold_border(ImageDraw.Draw(img))
         
-        # Return final image and circles
         inside_circles = self.get_inside_circles(circles)
         return img, inside_circles
 
