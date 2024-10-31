@@ -334,13 +334,160 @@ class IshiharaPlateGenerator:
                 return radius
         
         return None
+    
 
+    def pack_region(self, number_circles=None, is_number_region=True):
+        """Enhanced region packing with proper termination"""
+        circles = []
+        attempted_positions = set()
+        spacing = 0.5
+        
+        # Set parameters based on region
+        if is_number_region:
+            target_circles = 120
+            min_circles = 80  # Minimum acceptable circles for number region
+            region_checker = self.is_inside_number
+        else:
+            target_circles = 600
+            min_circles = 400  # Minimum acceptable circles for background
+            region_checker = lambda x, y: (
+                self.is_inside_main_circle(x, y) and 
+                not self.is_inside_number(x, y)
+            )
+        
+        # Initialize positions using grid
+        grid_size = 6
+        positions = []
+        
+        # Generate initial grid with slight offset for each row
+        x_start = self.center_x - self.main_circle_radius
+        x_end = self.center_x + self.main_circle_radius
+        y_start = self.center_y - self.main_circle_radius
+        y_end = self.center_y + self.main_circle_radius
+        
+        row_count = 0
+        for y in np.arange(y_start, y_end, grid_size):
+            offset = (row_count % 2) * (grid_size / 2)  # Offset alternate rows
+            for x in np.arange(x_start + offset, x_end, grid_size):
+                if region_checker(x, y):
+                    positions.append((x, y))
+            row_count += 1
+        
+        random.shuffle(positions)
+        
+        # Track failed attempts per radius
+        radius_attempts = {r: 0 for r in self.get_circle_sizes()}
+        max_radius_attempts = 50  # Maximum attempts per radius
+        
+        # Main packing loop
+        while positions and len(circles) < target_circles:
+            # Get current position
+            x, y = positions.pop(0)
+            pos_key = (round(x/grid_size*2), round(y/grid_size*2))
+            
+            if pos_key in attempted_positions:
+                continue
+            
+            attempted_positions.add(pos_key)
+            
+            # Try each radius
+            placed = False
+            for radius in self.get_circle_sizes():
+                if radius_attempts[radius] >= max_radius_attempts:
+                    continue
+                    
+                if self.check_position(x, y, radius, circles, number_circles, is_number_region, spacing):
+                    circles.append(((x, y), radius))
+                    placed = True
+                    
+                    # Add new positions around successful placement
+                    for angle in range(0, 360, 30):
+                        rad = math.radians(angle)
+                        new_x = x + math.cos(rad) * (radius * 2 + spacing)
+                        new_y = y + math.sin(rad) * (radius * 2 + spacing)
+                        if region_checker(new_x, new_y):
+                            positions.append((new_x, new_y))
+                    break
+                else:
+                    radius_attempts[radius] += 1
+            
+            # If position was successful, reset radius attempts
+            if placed:
+                radius_attempts = {r: 0 for r in self.get_circle_sizes()}
+            
+            # Periodically shuffle remaining positions
+            if len(circles) % 10 == 0:
+                random.shuffle(positions)
+            
+            # Check if we've hit minimum circle count and positions are getting scarce
+            if len(circles) >= min_circles and len(positions) < 50:
+                break
+            
+            # Break if all radii have been maxed out
+            if all(attempts >= max_radius_attempts for attempts in radius_attempts.values()):
+                break
+        
+        return circles
 
     def get_circle_sizes(self):
-        """Create 5 distinct circle sizes with quotas"""
-        # Define sizes in pixels (diameter)
-        sizes = [48, 40, 32, 24, 16]
+        """Circle sizes for efficient packing"""
+        sizes = [48, 40, 32, 28, 24, 20, 16]  # pixels diameter
         return [s//2 for s in sizes]  # Convert to radii
+
+    def check_position(self, x, y, radius, current_circles, number_circles=None, is_number_region=True, spacing=0.5):
+        """Optimized position checking"""
+        # Quick boundary check
+        dist_to_center = math.sqrt((x - self.center_x)**2 + (y - self.center_y)**2)
+        if dist_to_center + radius > self.main_circle_radius - 1:
+            return False
+            
+        # Region check
+        if is_number_region:
+            if not self.is_inside_number(x, y):
+                return False
+        else:
+            if self.is_inside_number(x, y):
+                return False
+                
+            # Check against number circles
+            if number_circles:
+                for (cx, cy), cr in number_circles:
+                    dist = math.sqrt((x - cx)**2 + (y - cy)**2)
+                    if dist < (radius + cr + spacing):
+                        return False
+        
+        # Check against current circles
+        for (cx, cy), cr in current_circles:
+            dist = math.sqrt((x - cx)**2 + (y - cy)**2)
+            if dist < (radius + cr + spacing):
+                return False
+        
+        return True
+
+    def pack_circles(self):
+        """Main packing routine with termination guarantees"""
+        # Pack number region
+        number_circles = self.pack_region(is_number_region=True)
+        if not number_circles:
+            raise RuntimeError("Failed to pack number region")
+        
+        # Pack background
+        background_circles = self.pack_region(number_circles, is_number_region=False)
+        if not background_circles:
+            raise RuntimeError("Failed to pack background region")
+        
+        # Convert to physics bodies
+        circles = []
+        for (x, y), radius in number_circles + background_circles:
+            body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
+            body.position = (x, y)
+            shape = pymunk.Circle(body, radius)
+            shape.friction = 0.9
+            shape.elasticity = 0.1
+            self.space.add(body, shape)
+            circles.append((shape, radius))
+        
+        return circles
 
 
     def fill_region(self, region_checker, grid, placed_circles, sizes_to_use):
@@ -602,14 +749,6 @@ class IshiharaPlateGenerator:
         return min(radii)  # Fallback to smallest radius
 
 
-
-    def get_circle_sizes(self):
-        """Extended range of circle sizes for better packing"""
-        # More size variety, especially in smaller sizes
-        sizes = [48, 40, 32, 28, 24, 20, 16]  # pixels diameter
-        return [s//2 for s in sizes]  # Convert to radii
-
-    def check_position(self, x, y, radius, current_circles, number_circles=None, is_number_region=True, spacing=0.5):
         """Position checking with minimal spacing"""
         # Check main circle boundary with buffer
         dist_to_center = math.sqrt((x - self.center_x)**2 + (y - self.center_y)**2)
@@ -638,235 +777,6 @@ class IshiharaPlateGenerator:
                 return False
                 
         return True
-
-    def pack_region(self, number_circles=None, is_number_region=True):
-        """Enhanced region packing with tighter spacing"""
-        circles = []
-        attempted_positions = set()
-        spacing = 0.5  # Minimal spacing
-        
-        # Adjust parameters based on region
-        if is_number_region:
-            target_circles = 120  # Increased for tighter packing
-            region_checker = self.is_inside_number
-        else:
-            target_circles = 600  # Significantly increased for background
-            region_checker = lambda x, y: (
-                self.is_inside_main_circle(x, y) and 
-                not self.is_inside_number(x, y)
-            )
-        
-        # Tighter grid for position tracking
-        grid_size = 6  # Reduced for more potential positions
-        grid_positions = []
-        
-        # Generate initial grid positions with overlap
-        step = grid_size * 0.75  # Overlapping grid
-        x_range = np.arange(
-            self.center_x - self.main_circle_radius,
-            self.center_x + self.main_circle_radius,
-            step
-        )
-        y_range = np.arange(
-            self.center_y - self.main_circle_radius,
-            self.center_y + self.main_circle_radius,
-            step
-        )
-        
-        for y in y_range:
-            for x in x_range:
-                if region_checker(x, y):
-                    # Add multiple jittered positions per grid point
-                    for _ in range(2):
-                        jitter = grid_size * 0.3
-                        x_jitter = x + random.uniform(-jitter, jitter)
-                        y_jitter = y + random.uniform(-jitter, jitter)
-                        grid_positions.append((x_jitter, y_jitter))
-        
-        random.shuffle(grid_positions)
-        positions = grid_positions
-        
-        max_attempts = 3000  # Increased for better coverage
-        attempts = 0
-        last_success = 0
-        
-        while attempts < max_attempts and len(circles) < target_circles:
-            if not positions or attempts - last_success > 100:
-                # Generate new positions around existing circles
-                positions = []
-                for (cx, cy), cr in circles:
-                    # More angles for tighter packing
-                    for angle in range(0, 360, 15):
-                        rad = math.radians(angle)
-                        # Multiple distance factors for better coverage
-                        for dist_factor in [1.0, 1.05, 1.1, 1.15]:
-                            new_x = cx + math.cos(rad) * (cr * 2 + spacing) * dist_factor
-                            new_y = cy + math.sin(rad) * (cr * 2 + spacing) * dist_factor
-                            if region_checker(new_x, new_y):
-                                positions.append((new_x, new_y))
-                
-                if not positions:
-                    break
-                random.shuffle(positions)
-                attempts = max(attempts, last_success + 50)  # Reset attempts if we found new positions
-            
-            # Select radius with preference for smaller circles in tight spots
-            radius = self.select_next_radius(circles, target_circles, positions)
-            if not radius:
-                break
-            
-            # Try each position
-            success = False
-            for x, y in positions[:]:
-                pos_key = (round(x/grid_size*2), round(y/grid_size*2))  # Finer position tracking
-                if pos_key not in attempted_positions:
-                    attempted_positions.add(pos_key)
-                    
-                    if self.check_position(x, y, radius, circles, number_circles, is_number_region, spacing):
-                        circles.append(((x, y), radius))
-                        positions.remove((x, y))
-                        success = True
-                        last_success = attempts
-                        
-                        # Add new positions around this circle
-                        for angle in range(0, 360, 15):
-                            rad = math.radians(angle)
-                            for dist_factor in [1.0, 1.05, 1.1, 1.15]:
-                                new_x = x + math.cos(rad) * (radius * 2 + spacing) * dist_factor
-                                new_y = y + math.sin(rad) * (radius * 2 + spacing) * dist_factor
-                                if region_checker(new_x, new_y):
-                                    positions.append((new_x, new_y))
-                        break
-            
-            if not success:
-                attempts += 1
-            
-            # More frequent position shuffling
-            if attempts % 25 == 0:
-                random.shuffle(positions)
-        
-        return circles
-
-
-
-        """Improved region packing with tighter spacing"""
-        circles = []
-        attempted_positions = set()
-        spacing = 1  # Reduced spacing
-        
-        # Set parameters based on region
-        if is_number_region:
-            target_circles = 95
-            region_checker = self.is_inside_number
-        else:
-            target_circles = 500  # Increased for tighter packing
-            region_checker = lambda x, y: (
-                self.is_inside_main_circle(x, y) and 
-                not self.is_inside_number(x, y)
-            )
-        
-        # Initialize grid for position tracking with tighter grid
-        grid_size = 8  # Reduced grid size for more potential positions
-        grid_positions = []
-        
-        # Generate initial grid positions
-        x_range = range(
-            int(self.center_x - self.main_circle_radius),
-            int(self.center_x + self.main_circle_radius),
-            grid_size
-        )
-        y_range = range(
-            int(self.center_y - self.main_circle_radius),
-            int(self.center_y + self.main_circle_radius),
-            grid_size
-        )
-        
-        for y in y_range:
-            for x in x_range:
-                if region_checker(x, y):
-                    # Add slight randomization to grid positions
-                    jitter = grid_size * 0.25
-                    x_jitter = x + random.uniform(-jitter, jitter)
-                    y_jitter = y + random.uniform(-jitter, jitter)
-                    grid_positions.append((x_jitter, y_jitter))
-        
-        random.shuffle(grid_positions)
-        positions = grid_positions
-        
-        max_attempts = 2000  # Increased for better coverage
-        attempts = 0
-        
-        while attempts < max_attempts and len(circles) < target_circles:
-            if not positions:
-                # Generate new positions around existing circles
-                positions = []
-                for (cx, cy), cr in circles:
-                    for angle in range(0, 360, 30):  # More angles for tighter packing
-                        rad = math.radians(angle)
-                        for dist_factor in [1.0, 1.1, 1.2]:  # Tighter distance factors
-                            new_x = cx + math.cos(rad) * (cr * 2 + spacing) * dist_factor
-                            new_y = cy + math.sin(rad) * (cr * 2 + spacing) * dist_factor
-                            if region_checker(new_x, new_y):
-                                positions.append((new_x, new_y))
-                
-                if not positions:
-                    break
-                random.shuffle(positions)
-            
-            # Select radius based on current distribution
-            radius = self.select_next_radius(circles, target_circles, positions)
-            
-            # Try each position
-            success = False
-            for x, y in positions[:]:
-                pos_key = (round(x/grid_size), round(y/grid_size))
-                if pos_key not in attempted_positions:
-                    attempted_positions.add(pos_key)
-                    
-                    if self.check_position(x, y, radius, circles, number_circles, is_number_region, spacing):
-                        circles.append(((x, y), radius))
-                        positions.remove((x, y))
-                        success = True
-                        
-                        # Add new positions around this circle
-                        for angle in range(0, 360, 30):
-                            rad = math.radians(angle)
-                            for dist_factor in [1.0, 1.1, 1.2]:
-                                new_x = x + math.cos(rad) * (radius * 2 + spacing) * dist_factor
-                                new_y = y + math.sin(rad) * (radius * 2 + spacing) * dist_factor
-                                if region_checker(new_x, new_y):
-                                    positions.append((new_x, new_y))
-                        break
-            
-            if not success:
-                attempts += 1
-            
-            # Shuffle remaining positions periodically
-            if attempts % 50 == 0:
-                random.shuffle(positions)
-        
-        return circles
-
-    def pack_circles(self):
-        """Pack circles with strict boundary enforcement"""
-        # First pack the number region
-        number_circles = self.pack_region(is_number_region=True)
-        
-        # Then pack the background with reference to number circles
-        background_circles = self.pack_region(number_circles, is_number_region=False)
-        
-        # Convert to physics bodies
-        circles = []
-        for (x, y), radius in number_circles + background_circles:
-            body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
-            body.position = (x, y)
-            shape = pymunk.Circle(body, radius)
-            shape.friction = 0.9
-            shape.elasticity = 0.1
-            self.space.add(body, shape)
-            circles.append((shape, radius))
-        
-        return circles
 
     def run_physics_simulation(self):
         """Replace physics simulation with fixed packing"""
