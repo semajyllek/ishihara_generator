@@ -1,9 +1,10 @@
-# color_generator.py
-from colorharmonies import Color
-import numpy as np
-import colorsys
-
 class ColorPaletteGenerator:
+    def create_color(self, h, s, l):
+        """Create a Color object with all required color spaces"""
+        RGB = colorsys.hls_to_rgb(h, l, s)
+        HSV = colorsys.rgb_to_hsv(*RGB)
+        return Color(RGB=RGB, HLS=(h, l, s), HSV=HSV)
+
     @staticmethod
     def rgb_to_hex(RGB):
         """Convert RGB values (0-1) to hex color string"""
@@ -12,14 +13,8 @@ class ColorPaletteGenerator:
             int(RGB[1] * 255),
             int(RGB[2] * 255)
         )
-    def create_color(self, h, s, l):
-        """Create a Color object with all required color spaces"""
-        RGB = colorsys.hls_to_rgb(h, l, s)
-        HSV = colorsys.rgb_to_hsv(*RGB)
-        return Color(RGB=RGB, HLS=(h, l, s), HSV=HSV)
 
-
-    def generate_background_palette(self, base_hue, condition, num_colors=12):
+    def generate_background_palette(self, base_hue, condition, num_colors=15):
         colors = []
         
         if condition == 'deuteranopia':
@@ -48,6 +43,31 @@ class ColorPaletteGenerator:
             s = np.random.uniform(*group['sat'])
             l = np.random.uniform(*group['light'])
             colors.append(self.create_color(h, s, l))
+
+        return [self.rgb_to_hex(color.RGB) for color in colors]
+
+    def generate_figure_palette(self, base_hue, condition, num_colors=15):
+        colors = []
+        
+        if condition == 'deuteranopia':
+            # Coral/orange figure colors
+            h_base = base_hue
+            
+            # Create variations of coral
+            saturations = np.linspace(0.6, 0.8, 5)
+            lightnesses = np.linspace(0.5, 0.7, 3)
+            
+            for s in saturations:
+                for l in lightnesses:
+                    h = (h_base + np.random.uniform(-5, 5)) / 360
+                    colors.append(self.create_color(h, s, l))
+
+            # Fill remaining slots with slight variations
+            while len(colors) < num_colors:
+                s = np.random.uniform(0.6, 0.8)
+                l = np.random.uniform(0.5, 0.7)
+                h = (h_base + np.random.uniform(-5, 5)) / 360
+                colors.append(self.create_color(h, s, l))
 
         return [self.rgb_to_hex(color.RGB) for color in colors]
 
@@ -101,11 +121,3 @@ def generate_ishihara_palette():
             'background_base': theme['background_base']
         }
     }
-
-if __name__ == "__main__":
-    palette = generate_ishihara_palette()
-    print(palette['name'])
-    print('Background:', palette['colors']['background'])
-    print('Figure:', palette['colors']['figure'])
-    print('Border:', palette['colors']['border'])
-    print('Background Base:', palette['colors']['background_base'])
