@@ -1,0 +1,5 @@
+pymunk
+pillow
+pygame
+numpy
+

@@ -1,0 +1,94 @@
+# palettes.yaml
+deuteranopia_palettes:
+  warm_autumn:
+    name: "Warm Autumn"
+    description: "Warm earthy tones with forest green contrast"
+    type: "deuteranopia"
+    colors:
+      background:
+        - "#FF7E5F"
+        - "#FEB47B"
+        - "#FF9966"
+        - "#FFB88C"
+        - "#FFA07A"
+        - "#FFDAB9"
+        - "#FFC3A0"
+        - "#FFE5B4"
+      figure:
+        - "#2D5A27"
+        - "#1B4B1E"
+        - "#4B7B3B"
+        - "#3A5F38"
+        - "#2F5233"
+        - "#5B8C5A"
+        - "#3E6B35"
+        - "#4A7023"
+      border: "#E8D0A9"
+      background_base: "#FFF6E9"
+    metadata:
+      author: "Jane Smith"
+      created: "2024-03-30"
+      contrast_ratio: 4.5
+      tags: ["autumn", "warm", "earthy"]
+
+  cool_ocean:
+    name: "Cool Ocean"
+    description: "Ocean blues with deep forest green contrast"
+    type: "deuteranopia"
+    colors:
+      background:
+        - "#89C2D9"
+        - "#61A5C2"
+        - "#468FAF"
+        - "#2C7DA0"
+        - "#A9D6E5"
+        - "#7CA5B8"
+        - "#89C2D9"
+        - "#61A5C2"
+      figure:
+        - "#014421"
+        - "#165B33"
+        - "#146B3A"
+        - "#1B7742"
+        - "#238C47"
+        - "#2A9134"
+        - "#32A63B"
+        - "#3ABB42"
+      border: "#A5C9CA"
+      background_base: "#F5FFFE"
+    metadata:
+      author: "Jane Smith"
+      created: "2024-03-30"
+      contrast_ratio: 4.8
+      tags: ["ocean", "cool", "blue"]
+
+  vintage_rose:
+    name: "Vintage Rose"
+    description: "Soft rose tones with emerald green contrast"
+    type: "deuteranopia"
+    colors:
+      background:
+        - "#E8A598"
+        - "#FFB5A7"
+        - "#FEC5BB"
+        - "#FCD5CE"
+        - "#FAE1DD"
+        - "#FFD7BA"
+        - "#FFE5D9"
+        - "#FFF1E6"
+      figure:
+        - "#064635"
+        - "#0B6E4F"
+        - "#129B58"
+        - "#1FA363"
+        - "#26AB5F"
+        - "#2DB35B"
+        - "#34BB57"
+        - "#3BC353"
+      border: "#DEB6AB"
+      background_base: "#FFF8F5"
+    metadata:
+      author: "Jane Smith"
+      created: "2024-03-30"
+      contrast_ratio: 4.2
+      tags: ["vintage", "rose", "soft"]
