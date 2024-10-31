@@ -37,12 +37,11 @@ class PaletteManager:
     def __init__(self, palette_path: Path = None):
         # If no path provided, use the default PALETTE_PATH
         self.palette_path = palette_path if palette_path is not None else PALETTE_PATH
+        self.palettes: Dict[str, Palette] = {}
+        self.load_palettes()
 
     def load_palettes(self):
         """Load palettes from YAML file"""
-
-        print(f"Looking for palette file at: {PALETTE_PATH}, {self.palette_path=}")
-
         with open(self.palette_path, 'r') as f:
             data = yaml.safe_load(f)
             
