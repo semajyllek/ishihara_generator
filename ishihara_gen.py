@@ -25,13 +25,13 @@ from .number_grids import NUMBER_FIVE
 # Fixed constants for circle sizes
 LARGE_CIRCLE_DIAMETER = 800  # pixels
 SMALL_CIRCLE_DIAMETERS = [40, 44, 48, 52]  # pixels
+GRID_SIZE = LARGE_CIRCLE_DIAMETER // 20
+FONT_SIZE = 128
+DEMO_NUMBER = 5
 
 
 class IshiharaPlateGenerator:
-    def __init__(self, palette_manager: Optional[PaletteManager] = None):
-        
-        # creates binary grids with stylistic integer masks
-        self.renderer = DigitRenderer(font_size=128, debug=True)
+    def __init__(self, palette_manager: Optional[PaletteManager] = None, number: int = DEMO_NUMBER):
         
         self.main_circle_radius = LARGE_CIRCLE_DIAMETER // 2
         self.small_circle_radii = [d // 2 for d in SMALL_CIRCLE_DIAMETERS]
@@ -66,6 +66,10 @@ class IshiharaPlateGenerator:
 
         self.create_boundary()
 
+        # creates binary grids with stylistic integer masks
+        self.renderer = DigitRenderer(font_size=FONT_SIZE, debug=True)
+        self.bin_num = self.renderer.digit_to_grid(digit=number, size=(GRID_SIZE, GRID_SIZE))
+
     def get_next_background_color(self):
         color = self.background_colors[self.current_bg_color_index]
         self.current_bg_color_index = (self.current_bg_color_index + 1) % len(self.background_colors)
@@ -84,7 +88,7 @@ class IshiharaPlateGenerator:
 
     def is_inside_number(self, x, y):
         # Convert coordinates to number grid space
-        grid_size = NUMBER_FIVE.shape
+        grid_size = self.bin_num.shape
         number_width = self.main_circle_radius * 1.4   # Made slightly larger
         number_height = self.main_circle_radius * 1.4
 
@@ -315,8 +319,6 @@ class IshiharaPlateGenerator:
 def generate_ishihara_plate(n: int = 5):
     palette_manager = PaletteManager()
     generator = IshiharaPlateGenerator(palette_manager)
-    grid_size = (LARGE_CIRCLE_DIAMETER // 2) / 10
-    bin_num = generator.renderer.digit_to_grid(number=n, size=grid_size)
-    image, circles = generator.generate_plate(bin_num)
+    image, circles = generator.generate_plate()
     return image, circles
 
