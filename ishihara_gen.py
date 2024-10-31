@@ -12,6 +12,7 @@ import pymunk
 import pymunk.pygame_util
 
 from PIL import Image, ImageDraw
+from PIL import ImageColor
 
 
 import yaml
@@ -210,14 +211,28 @@ class IshiharaPlateGenerator:
         return circle_regions
 
     def draw_circle_with_gradient(self, draw, pos, radius, color):
-        """Draw a single circle with gradient effect"""
-        for i in range(3):
-            draw.ellipse([
-                pos.x - radius + i,
-                pos.y - radius + i,
-                pos.x + radius - i,
-                pos.y + radius - i
-            ], fill=color, outline=self.darken_color(color))
+        """Draw a single circle with subtle gradient effect"""
+        rgb = ImageColor.getrgb(color)
+        
+        # Create slightly darker and lighter versions
+        darker = tuple(int(c * 0.95) for c in rgb)
+        lighter = tuple(int(min(255, c * 1.05)) for c in rgb)
+        
+        # Draw concentric circles for gradient effect
+        draw.ellipse([
+            pos.x - radius,
+            pos.y - radius,
+            pos.x + radius,
+            pos.y + radius
+        ], fill=color)
+        
+        # Add subtle highlight
+        draw.ellipse([
+            pos.x - radius * 0.8,
+            pos.y - radius * 0.8,
+            pos.x + radius * 0.6,
+            pos.y + radius * 0.6
+        ], fill=ImageColor.getrgb(lighter))
 
     def draw_circles(self, circles_draw, circle_regions):
         """Draw all circles with artistic color distribution"""

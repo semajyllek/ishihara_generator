@@ -1,6 +1,7 @@
 # palettes.yaml
 deuteranopia_palettes:
   warm_autumn:
+    name: "Warm Autumn"
     colors:
       background:
         - "#FF7E5F"  # Bright coral
