@@ -1,5 +1,6 @@
 import colorsys
 import numpy as np
+from colorharmonies import Color
 
 
 
