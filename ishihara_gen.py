@@ -131,51 +131,7 @@ class IshiharaPlateGenerator:
         return False
     
 
-    def add_circles_batch(self, num_circles):
-        """Enhanced circle placement with better coverage"""
-        circles = []
-        golden_ratio = (1 + 5 ** 0.5) / 2
-        
-        # Add more variation in circle placement
-        for i in range(num_circles):
-            radius = random.choice(self.small_circle_radii)
-            ring_space = radius * 0.08
-            physics_radius = radius + ring_space
-            
-            # Improved spiral placement with random offset
-            angle = i * golden_ratio * 2 * math.pi
-            base_r = (i / num_circles) * self.rect_width * 0.45
-            r = base_r + random.uniform(-20, 20)  # Add some randomness
-            
-            # Try multiple positions for better coverage
-            best_x = self.center_x
-            best_y = self.center_y
-            best_coverage = 0
-            
-            for _ in range(3):  # Try 3 different positions
-                test_x = self.center_x + r * math.cos(angle + random.uniform(-0.2, 0.2))
-                test_y = self.center_y - self.rect_height//2 + random.uniform(-50, 50)
-                
-                coverage = self.evaluate_position_coverage(test_x, test_y, radius)
-                if coverage > best_coverage:
-                    best_coverage = coverage
-                    best_x = test_x
-                    best_y = test_y
-            
-            mass = 1.0
-            moment = pymunk.moment_for_circle(mass, 0, physics_radius)
-            body = pymunk.Body(mass, moment)
-            body.position = best_x, best_y
-            
-            shape = pymunk.Circle(body, physics_radius)
-            shape.friction = 0.7
-            shape.elasticity = 0.1
-            shape.collision_type = 1
-            
-            self.space.add(body, shape)
-            circles.append((shape, radius))
-        
-        return circles
+
 
     def evaluate_position_coverage(self, x, y, radius):
         """Evaluate how well a position contributes to number coverage"""
@@ -254,44 +210,7 @@ class IshiharaPlateGenerator:
         
         return critical
     
-    def run_physics_simulation(self):
-        """Modified physics simulation with proper iteration calculation"""
-        circles = []
-        batch_size = 50
-        max_batches = 50
-        coverage_threshold = 0.85
-        
-        uncovered_regions = set()
-        
-        for batch in range(max_batches):
-            # Analyze current coverage
-            coverage = self.analyze_coverage(circles)
-            if coverage >= coverage_threshold:
-                break
-            
-            # Add circles based on current coverage
-            if batch > max_batches // 2:
-                new_circles = self.add_targeted_circles_batch(batch_size // 2, uncovered_regions)
-            else:
-                new_circles = self.add_circles_batch(batch_size)
-            
-            circles.extend(new_circles)
-            
-            # Calculate and run settling iterations
-            settling_iterations = self.calculate_settling_iterations(new_circles)
-            for _ in range(settling_iterations):
-                self.space.step(1/60.0)
-                self.apply_coverage_forces(new_circles)
-            
-            # Update uncovered regions
-            uncovered_regions = self.find_uncovered_regions(circles)
-        
-        # Final settling phase
-        final_iterations = 60 + len(circles) // 10
-        for _ in range(final_iterations):
-            self.space.step(1/60.0)
-        
-        return circles
+
 
 
     def analyze_coverage(self, circles):
@@ -420,6 +339,38 @@ class IshiharaPlateGenerator:
 
 
  
+    def draw_circles(self, circles_draw, circle_regions):
+        """Improved color distribution while maintaining simplicity"""
+        # Separate circles into figure and background groups
+        figure_circles = []
+        background_circles = []
+        
+        for circle, radius in circle_regions:
+            pos = circle.body.position
+            if not self.is_inside_main_circle(pos.x, pos.y):
+                continue
+                
+            if self.is_inside_number(pos.x, pos.y):
+                figure_circles.append((circle, radius))
+            else:
+                background_circles.append((circle, radius))
+        
+        # Shuffle both groups
+        random.shuffle(figure_circles)
+        random.shuffle(background_circles)
+        
+        # Draw background circles with varying colors
+        for i, (circle, radius) in enumerate(background_circles):
+            color_index = (i * 3) % len(self.background_colors)  # Skip colors for more variety
+            color = self.background_colors[color_index]
+            self.draw_circle_with_gradient(circles_draw, circle.body.position, radius, color)
+        
+        # Draw figure circles with varying colors
+        for i, (circle, radius) in enumerate(figure_circles):
+            color_index = (i * 3) % len(self.figure_colors)  # Skip colors for more variety
+            color = self.figure_colors[color_index]
+            self.draw_circle_with_gradient(circles_draw, circle.body.position, radius, color)
+
 
 
     def is_near_number_edge(self, x, y, threshold=2):
@@ -435,6 +386,7 @@ class IshiharaPlateGenerator:
     
 
     def create_boundary(self):
+        """Modified boundary with better containment"""
         body = pymunk.Body(body_type=pymunk.Body.STATIC)
         self.space.add(body)
 
@@ -443,15 +395,17 @@ class IshiharaPlateGenerator:
         rect_top = self.center_y - self.rect_height//2
         rect_bottom = self.center_y + self.rect_height//2
 
+        # Add more segments for better containment
         segments = [
-            [(rect_left, rect_bottom), (rect_right, rect_bottom)],
-            [(rect_left, rect_bottom), (rect_left, rect_top)],
-            [(rect_right, rect_bottom), (rect_right, rect_top)]
+            [(rect_left, rect_bottom), (rect_right, rect_bottom)],  # bottom
+            [(rect_left, rect_top), (rect_left, rect_bottom)],      # left
+            [(rect_right, rect_top), (rect_right, rect_bottom)],    # right
+            [(rect_left, rect_top), (rect_right, rect_top)],        # top
         ]
 
         for points in segments:
             segment = pymunk.Segment(body, points[0], points[1], 1.0)
-            segment.friction = 0.7
+            segment.friction = 0.9  # Increased friction
             segment.elasticity = 0.1
             self.space.add(segment)
 
@@ -544,46 +498,8 @@ class IshiharaPlateGenerator:
             
         return circle_regions
 
-    def draw_circles(self, circles_draw, circle_regions):
-        """Draw circles with enhanced color distribution"""
-        # Reset color indices
-        self.current_bg_color_index = 0
-        self.current_fg_color_index = 0
-        
-        # Group circles by region and quadrant
-        region_groups = {'inner': [], 'middle': [], 'outer': []}
-        for circle_data in circle_regions:
-            if self.is_inside_main_circle(circle_data['circle'].body.position.x, 
-                                        circle_data['circle'].body.position.y):
-                region_groups[circle_data['region']].append(circle_data)
-        
-        # Draw circles by region to ensure color variation
-        for region, circles in region_groups.items():
-            # Sort circles in region by quadrant and angle
-            circles.sort(key=lambda x: (x['quadrant'], x['angle']))
-            
-            # Track last used colors to avoid repetition
-            last_bg_color = None
-            last_fg_color = None
-            
-            for circle_data in circles:
-                pos = circle_data['circle'].body.position
-                radius = circle_data['radius']
-                
-                if circle_data['is_number']:
-                    # Get figure color ensuring it's different from last used
-                    color = self.get_next_figure_color(last_fg_color)
-                    last_fg_color = color
-                else:
-                    # Get background color ensuring it's different from last used
-                    color = self.get_next_background_color(last_bg_color)
-                    last_bg_color = color
-                
-                # Apply subtle variations based on position
-                color = self.adjust_color(color, circle_data['angle'], circle_data['distance'])
-                
-                self.draw_circle_with_gradient(circles_draw, pos, radius, color)
 
+             
     def get_next_background_color(self, last_color=None):
         """Get next background color ensuring variety"""
         if last_color is not None:
@@ -727,6 +643,72 @@ class IshiharaPlateGenerator:
         b = int(b * factor)
 
         return f'#{r:02x}{g:02x}{b:02x}'
+    
+
+    def add_circles_batch(self, num_circles):
+        """Modified circle placement for better coverage and less overlap"""
+        circles = []
+        golden_ratio = (1 + 5 ** 0.5) / 2
+        
+        for i in range(num_circles):
+            # Use smaller circles more often for better filling
+            radius = random.choice(self.small_circle_radii[:5])  # Prefer smaller circles
+            ring_space = radius * 0.08
+            physics_radius = radius + ring_space
+            
+            # Improved spiral placement
+            angle = i * golden_ratio * 2 * math.pi
+            r = math.sqrt(i / num_circles) * self.rect_width * 0.45  # Square root for better distribution
+            
+            x = self.center_x + r * math.cos(angle)
+            y = self.center_y + r * math.sin(angle) - self.rect_height//4  # Start higher up
+            
+            mass = 1.0
+            moment = pymunk.moment_for_circle(mass, 0, physics_radius)
+            body = pymunk.Body(mass, moment)
+            body.position = x, y
+            
+            shape = pymunk.Circle(body, physics_radius)
+            shape.friction = 0.9  # Increased friction to reduce sliding
+            shape.elasticity = 0.05  # Reduced elasticity to minimize bouncing
+            shape.collision_type = 1
+            
+            self.space.add(body, shape)
+            circles.append((shape, radius))
+        
+        return circles
+    
+
+    def run_physics_simulation(self):
+        """Improved physics simulation with better settling"""
+        circles = []
+        batch_size = 75  # Increased batch size
+        batches = 0
+        max_batches = 60  # More batches for better coverage
+        
+        while batches < max_batches:
+            new_circles = self.add_circles_batch(batch_size)
+            circles.extend(new_circles)
+            
+            # More iterations for better settling
+            for _ in range(60):
+                self.space.step(1/60.0)
+                
+                # Apply downward force to help settling
+                for circle, _ in new_circles:
+                    circle.body.apply_force_at_local_point((0, 400.0), (0, 0))
+            
+            batches += 1
+            
+            # Reduce batch size over time for finer filling
+            if batches > max_batches // 2:
+                batch_size = max(20, batch_size - 5)
+        
+        # Final settling phase
+        for _ in range(120):
+            self.space.step(1/60.0)
+        
+        return circles
     
 
     def generate_plate(self):
