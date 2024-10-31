@@ -374,13 +374,19 @@ class IshiharaPlateGenerator:
         return True
 
     
+    def get_circle_sizes(self):
+        """Extended range of circle sizes with even smaller options"""
+        # Added more small sizes for ultra-tight packing
+        sizes = [48, 40, 32, 28, 24, 20, 16, 12, 10, 8, 6]  # pixels diameter
+        return [s//2 for s in sizes]  # Convert to radii
+
     def pack_region(self, number_circles=None, is_number_region=True):
-        """Enhanced region packing with tighter background"""
+        """Enhanced region packing with ultra-tight background"""
         circles = []
         attempted_positions = set()
         
-        # Different spacing for number vs background
-        spacing = 0.5 if is_number_region else 0.25  # Tighter spacing for background
+        # Even tighter spacing for background
+        spacing = 0.5 if is_number_region else 0.1  # Minimal spacing for background
         
         # Set parameters based on region
         if is_number_region:
@@ -389,33 +395,33 @@ class IshiharaPlateGenerator:
             grid_size = 6
             region_checker = self.is_inside_number
         else:
-            target_circles = 1000  # Significantly increased for background
-            min_circles = 700
-            grid_size = 4  # Finer grid for background
+            target_circles = 1500  # Dramatically increased for background
+            min_circles = 1000
+            grid_size = 3  # Even finer grid for background
             region_checker = lambda x, y: (
                 self.is_inside_main_circle(x, y) and 
                 not self.is_inside_number(x, y)
             )
         
-        # Generate initial positions with tighter grid for background
+        # Generate initial positions
         positions = []
         row_count = 0
         
-        # Tighter position generation for background
-        step = grid_size * (1.0 if is_number_region else 0.75)
+        # Super tight position generation for background
+        step = grid_size * (1.0 if is_number_region else 0.5)
         
         for y in np.arange(self.center_y - self.main_circle_radius, 
                         self.center_y + self.main_circle_radius, 
                         step):
-            offset = (row_count % 2) * (step / 2)  # Offset alternate rows
+            offset = (row_count % 2) * (step / 2)
             for x in np.arange(self.center_x - self.main_circle_radius + offset,
                             self.center_x + self.main_circle_radius,
                             step):
                 if region_checker(x, y):
-                    # Add multiple jittered positions for background
+                    # Multiple positions per point for background
                     if not is_number_region:
-                        for _ in range(2):
-                            jitter = grid_size * 0.25
+                        for _ in range(3):  # Increased from 2 to 3
+                            jitter = grid_size * 0.3
                             x_jitter = x + random.uniform(-jitter, jitter)
                             y_jitter = y + random.uniform(-jitter, jitter)
                             if region_checker(x_jitter, y_jitter):
@@ -428,11 +434,11 @@ class IshiharaPlateGenerator:
         
         # Initial packing phase
         radius_attempts = {r: 0 for r in self.get_circle_sizes()}
-        max_radius_attempts = 50 if is_number_region else 75  # More attempts for background
+        max_radius_attempts = 50 if is_number_region else 100  # More attempts for background
         
         while positions and len(circles) < target_circles:
             x, y = positions.pop(0)
-            pos_key = (round(x/grid_size*2), round(y/grid_size*2))
+            pos_key = (round(x/grid_size*4), round(y/grid_size*4))  # Finer position tracking
             
             if pos_key in attempted_positions:
                 continue
@@ -441,12 +447,14 @@ class IshiharaPlateGenerator:
             
             # Try each radius
             placed = False
-            available_radii = self.get_circle_sizes()[:-2]  # Reserve smallest for gaps
+            available_radii = self.get_circle_sizes()[:-3] if is_number_region else self.get_circle_sizes()
             
-            # For background, try smaller circles more frequently
+            # For background, prioritize filling with smaller circles
             if not is_number_region:
-                available_radii = sorted(available_radii, key=lambda r: random.random())
-            
+                # Increase probability of selecting smaller circles
+                if random.random() < 0.7:  # 70% chance to use smaller circles
+                    available_radii = sorted(available_radii, reverse=True)[len(available_radii)//2:]
+                
             for radius in available_radii:
                 if radius_attempts[radius] >= max_radius_attempts:
                     continue
@@ -456,11 +464,11 @@ class IshiharaPlateGenerator:
                     placed = True
                     
                     # Add new positions around successful placement
-                    angle_step = 30 if is_number_region else 20  # More angles for background
+                    angle_step = 30 if is_number_region else 15  # Even more angles for background
                     for angle in range(0, 360, angle_step):
                         rad = math.radians(angle)
-                        # Multiple distance factors for background
-                        distance_factors = [1.0] if is_number_region else [1.0, 1.05, 1.1]
+                        # Multiple close distance factors for background
+                        distance_factors = [1.0] if is_number_region else [1.0, 1.02, 1.05]
                         for dist_factor in distance_factors:
                             new_x = x + math.cos(rad) * (radius * 2 + spacing) * dist_factor
                             new_y = y + math.sin(rad) * (radius * 2 + spacing) * dist_factor
@@ -476,36 +484,30 @@ class IshiharaPlateGenerator:
             if len(circles) % 10 == 0:
                 random.shuffle(positions)
         
-        # Gap filling phase
-        smallest_sizes = self.get_circle_sizes()[-2:]  # Use only smallest circles for gaps
-        min_gap_size = 4 if is_number_region else 3  # Smaller minimum gap size for background
-        
-        gaps = self.find_gaps(circles, region_checker, min_size=min_gap_size)
-        
-        for x, y, max_radius in gaps:
-            # Try to fit smallest circles in gaps
-            for radius in smallest_sizes:
-                if radius <= max_radius and self.check_position(x, y, radius, circles, number_circles, is_number_region, spacing):
-                    circles.append(((x, y), radius))
-                    break
-        
-        # Final gap sweep with minimum size
-        if len(circles) >= min_circles:
-            min_size = smallest_sizes[-1]
-            extra_gaps = self.find_gaps(circles, region_checker, min_size=min_size)
+        # More aggressive gap filling for background
+        if not is_number_region:
+            # Multiple gap-filling passes with decreasing minimum sizes
+            for min_gap_size in [4, 3, 2]:
+                gaps = self.find_gaps(circles, region_checker, min_size=min_gap_size)
+                
+                for x, y, max_radius in gaps:
+                    # Try increasingly smaller circles
+                    for radius in sorted(self.get_circle_sizes()[-5:], reverse=True):  # Try more small sizes
+                        if radius <= max_radius and self.check_position(x, y, radius, circles, number_circles, is_number_region, spacing):
+                            circles.append(((x, y), radius))
+                            break
+        else:
+            # Original gap filling for number region
+            smallest_sizes = self.get_circle_sizes()[-3:]
+            gaps = self.find_gaps(circles, region_checker, min_size=4)
             
-            for x, y, _ in extra_gaps:
-                if self.check_position(x, y, min_size, circles, number_circles, is_number_region, spacing):
-                    circles.append(((x, y), min_size))
+            for x, y, max_radius in gaps:
+                for radius in smallest_sizes:
+                    if radius <= max_radius and self.check_position(x, y, radius, circles, number_circles, is_number_region, spacing):
+                        circles.append(((x, y), radius))
+                        break
         
         return circles
-
-
-    def get_circle_sizes(self):
-        """Extended range of circle sizes with more small options"""
-        # Added more small sizes for better gap filling
-        sizes = [48, 40, 32, 28, 24, 20, 16, 12, 10]  # pixels diameter
-        return [s//2 for s in sizes]  # Convert to radii
 
 
     def find_gaps(self, current_circles, region_checker, min_size=5):
