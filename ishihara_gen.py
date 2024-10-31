@@ -18,9 +18,9 @@ import yaml
 from typing import Optional
 import random
 
-from palette_manager import PaletteManager
+from .palette_manager import PaletteManager
 
-from number_grids import NUMBER_FIVE
+from .number_grids import NUMBER_FIVE
 
 
 
@@ -325,3 +325,4 @@ def generate_ishihara_plate():
     generator = IshiharaPlateGenerator(palette_manager)
     image, circles = generator.generate_plate()
     return image, circles
+
