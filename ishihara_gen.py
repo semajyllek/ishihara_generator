@@ -412,7 +412,7 @@ class IshiharaPlateGenerator:
 
 
 # api
-def generate_ishihara_plate(num: int = 5, font_zip_url: Optional[str] = None):
+def generate_ishihara_plate(num: int = 5, font_zip_url: str = FONT_URL):
     generator = IshiharaPlateGenerator(num=num, font_zip_url=font_zip_url)
     image, circles = generator.generate_plate()
     return image, circles
