@@ -412,7 +412,6 @@ class IshiharaPlateGenerator:
         return img, inside_circles
 
 
-
 # api
 def generate_ishihara_plate(num: int = 5):
     generator = IshiharaPlateGenerator(num=num)
