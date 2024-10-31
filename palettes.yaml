@@ -2,6 +2,8 @@
 deuteranopia_palettes:
   warm_autumn:
     name: "Warm Autumn"
+    description: "Warm autumn tones with forest green contrast"
+    type: "deuteranopia"
     colors:
       background:
         - "#FF7E5F"  # Bright coral
