@@ -355,90 +355,35 @@ class IshiharaPlateGenerator:
         circle_regions.sort(key=lambda x: (x[2], x[3]))
         return circle_regions
 
+    
     def draw_circle_with_gradient(self, draw, pos, radius, color):
-        """
-        Draw a single circle with enhanced natural appearance, including:
-        - Soft gradient shading
-        - Natural highlight
-        - Subtle edge variation
-        - Micro-texture
-        """
+        """Draw a single circle with subtle gradient effect"""
         try:
-            # Convert color to RGB for manipulation
             rgb = ImageColor.getrgb(color)
             
-            # Create multiple color variations for natural look
-            darker = tuple(int(c * 0.92) for c in rgb)  # Base shadow
-            darker_edge = tuple(int(c * 0.88) for c in rgb)  # Edge shadow
-            lighter = tuple(int(min(255, c * 1.08)) for c in rgb)  # Highlight
-            lightest = tuple(int(min(255, c * 1.15)) for c in rgb)  # Bright highlight
+            # Create darker and lighter versions
+            darker = tuple(int(c * 0.95) for c in rgb)
+            lighter = tuple(int(min(255, c * 1.05)) for c in rgb)
             
-            # Base circle with slightly rough edge
-            edge_variation = radius * 0.03  # 3% variation
-            for i in range(3):  # Draw multiple times for softer edge
-                variation = random.uniform(-edge_variation, edge_variation)
-                draw.ellipse([
-                    pos.x - radius - variation,
-                    pos.y - radius - variation,
-                    pos.x + radius + variation,
-                    pos.y + radius + variation
-                ], fill=darker_edge)
-
-            # Main circle body
+            # Main circle
             draw.ellipse([
-                pos.x - radius * 0.98,
-                pos.y - radius * 0.98,
-                pos.x + radius * 0.98,
-                pos.y + radius * 0.98
+                pos.x - radius,
+                pos.y - radius,
+                pos.x + radius,
+                pos.y + radius
             ], fill=color)
             
-            # Add base highlight
-            highlight_radius = radius * 0.85
-            offset_x = -radius * 0.1  # Offset for more natural light direction
-            offset_y = -radius * 0.1
+            # Highlight
+            highlight_radius = radius * 0.7
             draw.ellipse([
-                pos.x - highlight_radius + offset_x,
-                pos.y - highlight_radius + offset_y,
-                pos.x + highlight_radius * 0.7 + offset_x,
-                pos.y + highlight_radius * 0.7 + offset_y
+                pos.x - highlight_radius,
+                pos.y - highlight_radius,
+                pos.x + highlight_radius * 0.8,
+                pos.y + highlight_radius * 0.8
             ], fill=lighter)
             
-            # Add bright highlight spot
-            spot_radius = radius * 0.3
-            spot_offset_x = -radius * 0.25
-            spot_offset_y = -radius * 0.25
-            draw.ellipse([
-                pos.x - spot_radius + spot_offset_x,
-                pos.y - spot_radius + spot_offset_y,
-                pos.x + spot_radius + spot_offset_x,
-                pos.y + spot_radius + spot_offset_y
-            ], fill=lightest)
-            
-            # Add micro-highlight for shine
-            micro_radius = radius * 0.15
-            micro_offset_x = -radius * 0.3
-            micro_offset_y = -radius * 0.3
-            draw.ellipse([
-                pos.x - micro_radius + micro_offset_x,
-                pos.y - micro_radius + micro_offset_y,
-                pos.x + micro_radius + micro_offset_x,
-                pos.y + micro_radius + micro_offset_y
-            ], fill=tuple(int(min(255, c * 1.25)) for c in rgb))
-            
-            # Add subtle edge shadow
-            edge_shadow_width = max(1, int(radius * 0.1))
-            for i in range(edge_shadow_width):
-                opacity = int(80 * (1 - i/edge_shadow_width))  # Fade out shadow
-                shadow_color = tuple(int(c * (1 - 0.2 * (1 - i/edge_shadow_width))) for c in rgb)
-                draw.ellipse([
-                    pos.x - radius - i/2,
-                    pos.y - radius - i/2,
-                    pos.x + radius + i/2,
-                    pos.y + radius + i/2
-                ], fill=None, outline=shadow_color)
-
         except Exception as e:
-            # Fallback to simple circle if effects fail
+            # Fallback to simple circle if gradient fails
             draw.ellipse([
                 pos.x - radius,
                 pos.y - radius,
@@ -447,8 +392,24 @@ class IshiharaPlateGenerator:
             ], fill=color)
 
 
-
     def add_subtle_texture(self, img):
+        """Add subtle noise texture to the image"""
+        width, height = img.size
+        pixels = img.load()
+        
+        for x in range(width):
+            for y in range(height):
+                if isinstance(pixels[x, y], int):  # Handle grayscale images
+                    continue
+                r, g, b = pixels[x, y][:3]
+                noise = random.randint(-5, 5)
+                pixels[x, y] = (
+                    max(0, min(255, r + noise)),
+                    max(0, min(255, g + noise)),
+                    max(0, min(255, b + noise))
+                )
+
+    def add_subtle_texture2(self, img):
         """
         Add enhanced natural texture to the image.
         """
@@ -476,6 +437,7 @@ class IshiharaPlateGenerator:
                     max(0, min(255, g + texture_noise)),
                     max(0, min(255, b + texture_noise - color_shift))
                 )
+
 
 
     def draw_circles(self, circles_draw, circle_regions):
@@ -584,7 +546,7 @@ class IshiharaPlateGenerator:
         self.draw_circles(circles_draw, circle_regions)
         
         # Add texture before final composition
-        self.add_subtle_texture(circles_img)
+        #self.add_subtle_texture(circles_img)
         
         # Combine all images
         img.paste(circles_img, (0, 0), mask)
