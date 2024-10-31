@@ -417,63 +417,85 @@ class IshiharaPlateGenerator:
         
         return new_circles
 
-    def pack_number_region(self, placed_circles=None):
-        """Pack the number region first with diverse circle sizes"""
-        if placed_circles is None:
-            placed_circles = []
-            
+    def get_circle_sizes(self):
+        """Create 4-5 distinct circle sizes with good distribution"""
+        # Define 5 distinct sizes
+        sizes = [48, 40, 32, 24, 16]  # pixels diameter
+        return [s//2 for s in sizes]  # Convert to radii
+
+    def enforce_size_distribution(self, circles, target_count):
+        """Check if we have a good distribution of circle sizes"""
+        size_counts = {}
+        for _, radius in circles:
+            size_counts[radius] = size_counts.get(radius, 0) + 1
+        
+        # Get target count per size (roughly equal distribution)
+        target_per_size = target_count / len(self.get_circle_sizes())
+        
+        # Check if any size is overused
+        for radius, count in size_counts.items():
+            if count > target_per_size * 1.3:  # Allow 30% variance
+                return False
+        return True
+
+    def pack_number_region(self):
+        """Pack the number region with balanced size distribution"""
         number_circles = []
         attempted_positions = set()
-        rim_spacing = 2  # Consistent white rim spacing
+        rim_spacing = 2
         
-        # Sort radii from largest to smallest
-        radii = sorted(self.small_circle_radii, reverse=True)
+        # Get balanced circle sizes
+        radii = self.get_circle_sizes()
         
         def try_position(x, y, radius):
-            """Check if a circle fits at position with proper rim spacing"""
             if not self.is_inside_number(x, y):
                 return False
                 
-            # Check against all existing circles
-            for (cx, cy), cr in placed_circles + number_circles:
+            for (cx, cy), cr in number_circles:
                 dist = math.sqrt((x - cx)**2 + (y - cy)**2)
                 if dist < (radius + cr + rim_spacing):
                     return False
-                    
             return True
         
-        # First pass: Place larger circles strategically along the number
-        for y in range(int(self.number_y), int(self.number_y + self.number_height), 20):
-            for x in range(int(self.number_x), int(self.number_x + self.number_width), 20):
+        # Initial placement grid for even distribution
+        grid_size = 20
+        for y in range(int(self.number_y), int(self.number_y + self.number_height), grid_size):
+            for x in range(int(self.number_x), int(self.number_x + self.number_width), grid_size):
                 if not self.is_inside_number(x, y):
                     continue
-                    
-                # Try each radius starting with largest
-                for radius in radii[:3]:  # Larger circles first
+                
+                # Try each radius in random order to maintain size diversity
+                available_radii = radii.copy()
+                random.shuffle(available_radii)
+                
+                for radius in available_radii:
                     if try_position(x, y, radius):
                         number_circles.append(((x, y), radius))
                         break
         
-        # Second pass: Fill gaps with progressively smaller circles
-        max_attempts = 5000  # Increased attempts for better coverage
+        # Fill remaining spaces
+        max_attempts = 10000
         attempts = 0
         
-        while attempts < max_attempts:
-            # Generate candidate position near existing circles
+        while attempts < max_attempts and len(number_circles) < 97:  # Target number from sample
+            # Select base circle
             if number_circles:
                 base_circle = random.choice(number_circles)
                 base_x, base_y = base_circle[0]
                 base_radius = base_circle[1]
                 
+                # Try positions around existing circle
                 angle = random.uniform(0, 2 * math.pi)
-                # Try different distances from existing circles
-                for distance_factor in [1.0, 1.2, 1.4]:
-                    # Try different circle sizes for each position
-                    for radius in radii:
-                        # Skip if radius is too large compared to nearby circles
-                        if radius > base_radius * 1.2:
-                            continue
-                            
+                available_radii = radii.copy()
+                random.shuffle(available_radii)  # Randomize size selection
+                
+                for radius in available_radii:
+                    # Ensure good size distribution
+                    temp_circles = number_circles + [((0, 0), radius)]
+                    if not self.enforce_size_distribution(temp_circles, 97):
+                        continue
+                    
+                    for distance_factor in [1.0, 1.2, 1.4]:
                         distance = (base_radius + radius + rim_spacing) * distance_factor
                         x = base_x + math.cos(angle) * distance
                         y = base_y + math.sin(angle) * distance
@@ -481,79 +503,80 @@ class IshiharaPlateGenerator:
                         pos_key = (round(x/2), round(y/2))
                         if pos_key in attempted_positions:
                             continue
-                            
-                        attempted_positions.add(pos_key)
                         
+                        attempted_positions.add(pos_key)
                         if try_position(x, y, radius):
                             number_circles.append(((x, y), radius))
                             break
-            else:
-                # Initial placement if no circles yet
-                x = self.number_x + self.number_width/2
-                y = self.number_y + self.number_height/2
-                if try_position(x, y, radii[0]):
-                    number_circles.append(((x, y), radii[0]))
             
             attempts += 1
-            
-            # Break if we have good coverage
-            if len(number_circles) > 97:  # Target similar to sample image
-                break
         
         return number_circles
 
     def pack_background(self, number_circles):
-        """Fill the background around the number"""
+        """Fill background with balanced size distribution"""
         background_circles = []
         attempted_positions = set()
         rim_spacing = 2
         
-        radii = sorted(self.small_circle_radii, reverse=True)
+        radii = self.get_circle_sizes()
+        target_background_circles = 400  # Increased for better coverage
         
         def try_background_position(x, y, radius):
-            """Check if a circle fits in background"""
             if not self.is_inside_main_circle(x, y) or self.is_inside_number(x, y):
                 return False
                 
-            # Check against all existing circles
             all_circles = number_circles + background_circles
             for (cx, cy), cr in all_circles:
                 dist = math.sqrt((x - cx)**2 + (y - cy)**2)
                 if dist < (radius + cr + rim_spacing):
                     return False
-                    
             return True
         
-        # Fill background using spiral pattern
-        max_attempts = 10000
+        # Use concentric circles for more even coverage
+        max_attempts = 20000  # Increased for better coverage
         attempts = 0
-        golden_angle = math.pi * (3 - math.sqrt(5))
         
         while attempts < max_attempts:
-            # Generate position using golden angle spiral
-            r = math.sqrt(attempts / max_attempts) * self.main_circle_radius
-            theta = attempts * golden_angle
-            
-            x = self.center_x + r * math.cos(theta)
-            y = self.center_y + r * math.sin(theta)
+            # Generate position using both spiral and grid patterns
+            if attempts % 2 == 0:
+                # Spiral pattern
+                r = math.sqrt(attempts / max_attempts) * self.main_circle_radius
+                theta = attempts * math.pi * (3 - math.sqrt(5))  # Golden angle
+                x = self.center_x + r * math.cos(theta)
+                y = self.center_y + r * math.sin(theta)
+            else:
+                # Grid pattern
+                grid_size = 20
+                grid_x = (attempts // grid_size) % (int(self.width) // grid_size)
+                grid_y = (attempts // grid_size // (int(self.width) // grid_size))
+                x = grid_x * grid_size
+                y = grid_y * grid_size
             
             pos_key = (round(x/2), round(y/2))
             if pos_key not in attempted_positions:
                 attempted_positions.add(pos_key)
                 
-                # Try each radius
-                for radius in radii:
+                # Try each radius in random order
+                available_radii = radii.copy()
+                random.shuffle(available_radii)
+                
+                for radius in available_radii:
+                    # Check size distribution
+                    temp_circles = background_circles + [((0, 0), radius)]
+                    if not self.enforce_size_distribution(temp_circles, target_background_circles):
+                        continue
+                        
                     if try_background_position(x, y, radius):
                         background_circles.append(((x, y), radius))
                         break
             
             attempts += 1
-            
-            # Break if we have good coverage
-            if len(background_circles) > 200:  # Adjust based on desired density
+            if len(background_circles) >= target_background_circles:
                 break
         
         return background_circles
+
 
     def pack_circles(self):
         """Pack circles prioritizing number region"""
