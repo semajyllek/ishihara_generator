@@ -34,17 +34,17 @@ class Palette:
     metadata: Metadata
 
 class PaletteManager:
-    def __init__(self, palette_file: str = PALETTE_PATH):
-        self.palette_file = palette_file
+    def __init__(self, palette_path: Path = PALETTE_PATH):
+        self.palette_path = palette_path
         self.palettes: Dict[str, Palette] = {}
         self.load_palettes()
 
     def load_palettes(self):
         """Load palettes from YAML file"""
 
-        print(f"Looking for palette file at: {PALETTE_PATH}, {self.palette_file=}")
+        print(f"Looking for palette file at: {PALETTE_PATH}, {self.palette_path=}")
 
-        with open(self.palette_file, 'r') as f:
+        with open(self.palette_path, 'r') as f:
             data = yaml.safe_load(f)
             
         for key, palette_data in data['deuteranopia_palettes'].items():
