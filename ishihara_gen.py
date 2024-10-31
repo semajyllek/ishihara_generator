@@ -92,23 +92,195 @@ class IshiharaPlateGenerator:
 
 
     def is_inside_number(self, x, y):
-        # Convert coordinates to number grid space
-        grid_size = self.bin_num.shape
-        number_width = self.main_circle_radius * 1.4   # Made slightly larger
-        number_height = self.main_circle_radius * 1.4
-
+        """
+        Enhanced number boundary checking with edge detection.
+        """
+        # Make mask slightly smaller for tighter fit
+        number_width = self.main_circle_radius * 1.2  # Reduced from 1.4
+        number_height = self.main_circle_radius * 1.2
+        
         # Center the number with slight upward shift
         number_x = self.center_x - number_width/2
         number_y = self.center_y - number_height/2 - self.main_circle_radius * 0.1
-
-        # Convert point to grid coordinates
-        grid_x = int((x - number_x) / (number_width / grid_size[1]))
-        grid_y = int((y - number_y) / (number_height / grid_size[0]))
-
-        # Check if point is inside grid and is part of number
-        if 0 <= grid_x < grid_size[1] and 0 <= grid_y < grid_size[0]:
-            return self.bin_num[grid_y, grid_x] == 1
+        
+        # Convert point to grid coordinates with sub-pixel precision
+        grid_x_float = (x - number_x) / (number_width / self.bin_num.shape[1])
+        grid_y_float = (y - number_y) / (number_height / self.bin_num.shape[0])
+        
+        # Get the four nearest grid points
+        grid_x1, grid_x2 = int(grid_x_float), min(int(grid_x_float) + 1, self.bin_num.shape[1] - 1)
+        grid_y1, grid_y2 = int(grid_y_float), min(int(grid_y_float) + 1, self.bin_num.shape[0] - 1)
+        
+        # Check if any of the four nearest points are part of the number
+        if (0 <= grid_x1 < self.bin_num.shape[1] and 
+            0 <= grid_y1 < self.bin_num.shape[0]):
+            # Calculate interpolation weights
+            fx = grid_x_float - grid_x1
+            fy = grid_y_float - grid_y1
+            
+            # Bilinear interpolation of the binary mask
+            v1 = self.bin_num[grid_y1, grid_x1]
+            v2 = self.bin_num[grid_y1, grid_x2] if grid_x2 < self.bin_num.shape[1] else v1
+            v3 = self.bin_num[grid_y2, grid_x1] if grid_y2 < self.bin_num.shape[0] else v1
+            v4 = self.bin_num[grid_y2, grid_x2] if (grid_x2 < self.bin_num.shape[1] and 
+                                                grid_y2 < self.bin_num.shape[0]) else v1
+            
+            # Interpolate
+            value = (v1 * (1-fx) * (1-fy) + 
+                    v2 * fx * (1-fy) + 
+                    v3 * (1-fx) * fy + 
+                    v4 * fx * fy)
+            
+            # Use a threshold for smoother edges
+            return value > 0.5
         return False
+
+    def add_circles_batch(self, num_circles):
+        """Modified circle placement with proper density control"""
+        circles = []
+        golden_ratio = (1 + 5 ** 0.5) / 2
+        
+        # Density control parameters
+        base_density_multiplier = 1.2  # Increase density near number edges
+        edge_density_multiplier = 1.5  # Even higher density right at edges
+        
+        for i in range(num_circles):
+            radius = random.choice(self.small_circle_radii)
+            
+            # Use golden ratio for initial placement
+            angle = i * golden_ratio * 2 * math.pi
+            r = random.uniform(0, self.rect_width * 0.45)
+            
+            x = self.center_x + r * math.cos(angle)
+            y = self.center_y - self.rect_height//2 + random.uniform(-50, 0)
+            
+            # Check if we're near a number edge
+            near_edge = self.is_near_number_edge(x, y)
+            
+            # Adjust circle properties based on position
+            if near_edge:
+                # Increase number of circles near edges by potentially adding more
+                if random.random() < (edge_density_multiplier - 1):
+                    # Add an additional nearby circle
+                    offset = radius * 0.8
+                    x_offset = x + random.uniform(-offset, offset)
+                    y_offset = y + random.uniform(-offset, offset)
+                    
+                    mass = 0.7  # Lighter mass for better edge packing
+                    moment = pymunk.moment_for_circle(mass, 0, radius * 0.9)  # Slightly smaller
+                    body = pymunk.Body(mass, moment)
+                    body.position = x_offset, y_offset
+                    
+                    shape = pymunk.Circle(body, radius * 0.85)  # Smaller collision radius
+                    shape.friction = 0.7
+                    shape.elasticity = 0.05  # Less bounce for better settling
+                    shape.collision_type = 1
+                    
+                    self.space.add(body, shape)
+                    circles.append((shape, radius * 0.9))
+                
+                # Original circle with edge properties
+                mass = 0.8
+                collision_radius = radius * 0.9
+            else:
+                # Check if we're in the general number area
+                in_number = self.is_inside_number(x, y)
+                if in_number:
+                    mass = 1.0 * base_density_multiplier
+                    collision_radius = radius * 0.95
+                else:
+                    mass = 1.0
+                    collision_radius = radius - 0.5
+            
+            # Create the main circle
+            moment = pymunk.moment_for_circle(mass, 0, radius)
+            body = pymunk.Body(mass, moment)
+            body.position = x, y
+            
+            shape = pymunk.Circle(body, collision_radius)
+            shape.friction = 0.7
+            shape.elasticity = 0.1 if not near_edge else 0.05
+            shape.collision_type = 1
+            
+            self.space.add(body, shape)
+            circles.append((shape, radius))
+        
+        return circles
+
+    def run_physics_simulation(self):
+        """Enhanced physics simulation with density-aware settling"""
+        circles = []
+        batch_size = 50
+        batches = 0
+        max_batches = 40
+        
+        # Dynamic settling iterations based on circle position
+        base_settling_iterations = 30
+        edge_settling_iterations = 45
+        
+        while batches < max_batches:
+            new_circles = self.add_circles_batch(batch_size)
+            circles.extend(new_circles)
+            
+            # Count circles near edges for adaptive settling
+            edge_circles = sum(1 for circle, _ in new_circles 
+                            if self.is_near_number_edge(circle.body.position.x, 
+                                                    circle.body.position.y))
+            
+            # Adjust settling iterations based on edge circle ratio
+            edge_ratio = edge_circles / len(new_circles)
+            settling_iterations = int(base_settling_iterations + 
+                                    (edge_settling_iterations - base_settling_iterations) * edge_ratio)
+            
+            # More iterations where needed
+            for _ in range(settling_iterations):
+                self.space.step(1/60.0)
+                
+                # Apply additional forces to circles near edges
+                for circle, radius in new_circles:
+                    pos = circle.body.position
+                    if self.is_near_number_edge(pos.x, pos.y):
+                        # Add a small attractive force toward the nearest number edge
+                        center_angle = math.atan2(self.center_y - pos.y, 
+                                                self.center_x - pos.x)
+                        
+                        # Vary force based on position
+                        base_force = 100.0
+                        if self.is_inside_number(pos.x, pos.y):
+                            force = base_force * 0.7  # Weaker force inside number
+                        else:
+                            force = base_force * 1.2  # Stronger force outside number
+                        
+                        circle.body.apply_force_at_local_point((
+                            math.cos(center_angle) * force,
+                            math.sin(center_angle) * force
+                        ))
+            
+            batches += 1
+        
+        # Final settling phase with adaptive timing
+        edge_circle_count = sum(1 for circle, _ in circles 
+                            if self.is_near_number_edge(circle.body.position.x, 
+                                                        circle.body.position.y))
+        final_settling_time = int(120 + (edge_circle_count / len(circles)) * 60)
+        
+        for _ in range(final_settling_time):
+            self.space.step(1/60.0)
+        
+        return circles
+
+
+    def is_near_number_edge(self, x, y, threshold=2):
+        """
+        Check if a point is near the edge of the number.
+        """
+        # Check points in a small radius around the given point
+        for dx in range(-threshold, threshold + 1):
+            for dy in range(-threshold, threshold + 1):
+                if self.is_inside_number(x + dx, y + dy) != self.is_inside_number(x, y):
+                    return True
+        return False
+    
 
     def create_boundary(self):
         body = pymunk.Body(body_type=pymunk.Body.STATIC)
@@ -130,36 +302,6 @@ class IshiharaPlateGenerator:
             segment.friction = 0.7
             segment.elasticity = 0.1
             self.space.add(segment)
-
-    def add_circles_batch(self, num_circles):
-        circles = []
-        # Use golden ratio for more natural-looking distribution
-        golden_ratio = (1 + 5 ** 0.5) / 2
-        
-        for i in range(num_circles):
-            radius = random.choice(self.small_circle_radii)
-            
-            # Create a more organic distribution
-            angle = i * golden_ratio * 2 * math.pi
-            r = random.uniform(0, self.rect_width * 0.45)
-            
-            x = self.center_x + r * math.cos(angle)
-            y = self.center_y - self.rect_height//2 + random.uniform(-50, 0)
-            
-            mass = 1.0
-            moment = pymunk.moment_for_circle(mass, 0, radius)
-            body = pymunk.Body(mass, moment)
-            body.position = x, y
-            
-            shape = pymunk.Circle(body, radius - 0.5)
-            shape.friction = 0.7
-            shape.elasticity = 0.1
-            shape.collision_type = 1
-            
-            self.space.add(body, shape)
-            circles.append((shape, radius))
-            
-        return circles
 
     def create_initial_images(self):
         """Create base images and drawing objects"""
@@ -324,28 +466,6 @@ class IshiharaPlateGenerator:
         return [(c, r) for c, r in circles 
                 if self.is_inside_main_circle(c.body.position.x, c.body.position.y)]
 
-
-    def run_physics_simulation(self):
-        """Run the physics simulation to place circles"""
-        circles = []
-        batch_size = 50
-        batches = 0
-        max_batches = 40
-
-        while batches < max_batches:
-            new_circles = self.add_circles_batch(batch_size)
-            circles.extend(new_circles)
-
-            for _ in range(20):
-                self.space.step(1/60.0)
-
-            batches += 1
-
-        # Extra settling time
-        for _ in range(120):
-            self.space.step(1/60.0)
-
-        return circles
 
     def adjust_color(self, color, angle, dist):
         """Adjust color based on position for more artistic variation"""
