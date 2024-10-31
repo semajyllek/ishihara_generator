@@ -318,7 +318,7 @@ class IshiharaPlateGenerator:
 # api
 def generate_ishihara_plate(num: int = 5):
     palette_manager = PaletteManager()
-    generator = IshiharaPlateGenerator(palette_manager, num=n)
+    generator = IshiharaPlateGenerator(palette_manager, num=num)
     image, circles = generator.generate_plate()
     return image, circles
 
