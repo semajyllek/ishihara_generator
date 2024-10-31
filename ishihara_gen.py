@@ -86,15 +86,11 @@ class IshiharaPlateGenerator:
         self.create_boundary()
 
     def setup_number_transform(self):
-        """Pre-compute coordinate transformation matrices for number checking"""
-        number_width = self.main_circle_radius * 1.4
-        number_height = self.main_circle_radius * 1.4
-        
-        self.number_x = self.center_x - number_width/2
-        self.number_y = self.center_y - number_height/2 - self.main_circle_radius * 0.1
-        
-        self.x_scale = number_width / self.bin_num.shape[1]
-        self.y_scale = number_height / self.bin_num.shape[0]
+        """Pre-compute coordinate transformation constants"""
+        self.number_width = self.main_circle_radius * 1.4
+        self.number_height = self.main_circle_radius * 1.4
+        self.number_x = self.center_x - self.number_width/2
+        self.number_y = self.center_y - self.number_height/2 - self.main_circle_radius * 0.1
 
 
     def get_next_background_color(self):
@@ -106,13 +102,13 @@ class IshiharaPlateGenerator:
         color = self.figure_colors[self.current_fg_color_index]
         self.current_fg_color_index = (self.current_fg_color_index + 1) % len(self.figure_colors)
         return color
-
+    
     @lru_cache(maxsize=1024)
     def is_inside_main_circle(self, x, y):
-        """Cached version of circle boundary check"""
         dx = x - self.center_x
         dy = y - self.center_y
         return dx*dx + dy*dy <= self.main_circle_radius * self.main_circle_radius
+    
 
     def is_inside_number(self, x, y):
         """Optimized number boundary checking"""
