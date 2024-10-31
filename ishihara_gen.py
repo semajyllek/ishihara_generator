@@ -572,21 +572,6 @@ class IshiharaPlateGenerator:
         
         return background_circles
 
-    def check_position(self, x, y, radius, current_circles, spacing=2):
-        """Check if a circle fits at position with boundary checking"""
-        # First check if point is valid for background
-        if not self.is_inside_main_circle(x, y):
-            return False
-            
-        # Then check against other circles
-        for circle in current_circles:
-            cx, cy = circle[0]
-            cr = circle[1]
-            dist = math.sqrt((x - cx)**2 + (y - cy)**2)
-            if dist < (radius + cr + spacing):
-                return False
-        return True
-
     def select_next_radius(self, current_circles, target_total, positions):
         """Select next radius with better termination conditions"""
         radii = self.get_circle_sizes()
@@ -619,68 +604,132 @@ class IshiharaPlateGenerator:
         
         return min(radii)  # Fallback to smallest radius
 
-    def pack_region(self, is_number_region=True):
-        """Generic region packing with better termination"""
+
+
+
+
+
+    def check_position(self, x, y, radius, current_circles, number_circles=None, is_number_region=True, spacing=1):
+        """Enhanced position checking with strict boundary enforcement"""
+        # Check main circle boundary
+        if not self.is_inside_main_circle(x, y):
+            return False
+            
+        # Check region boundaries
+        if is_number_region:
+            if not self.is_inside_number(x, y):
+                return False
+        else:
+            if self.is_inside_number(x, y):
+                return False
+                
+            # For background circles, also check against number circles
+            if number_circles:
+                for (cx, cy), cr in number_circles:
+                    dist = math.sqrt((x - cx)**2 + (y - cy)**2)
+                    if dist < (radius + cr + spacing):
+                        return False
+        
+        # Check against current region's circles with tighter spacing
+        for (cx, cy), cr in current_circles:
+            dist = math.sqrt((x - cx)**2 + (y - cy)**2)
+            if dist < (radius + cr + spacing):
+                return False
+                
+        return True
+
+    def pack_region(self, number_circles=None, is_number_region=True):
+        """Improved region packing with tighter spacing"""
         circles = []
         attempted_positions = set()
+        spacing = 1  # Reduced spacing
         
         # Set parameters based on region
         if is_number_region:
             target_circles = 95
             region_checker = self.is_inside_number
         else:
-            target_circles = 400
+            target_circles = 500  # Increased for tighter packing
             region_checker = lambda x, y: (
                 self.is_inside_main_circle(x, y) and 
                 not self.is_inside_number(x, y)
             )
         
-        # Initialize grid for position tracking
-        grid_size = 10
+        # Initialize grid for position tracking with tighter grid
+        grid_size = 8  # Reduced grid size for more potential positions
         grid_positions = []
         
         # Generate initial grid positions
-        for y in range(int(self.center_y - self.main_circle_radius), 
-                    int(self.center_y + self.main_circle_radius), grid_size):
-            for x in range(int(self.center_x - self.main_circle_radius),
-                        int(self.center_x + self.main_circle_radius), grid_size):
+        x_range = range(
+            int(self.center_x - self.main_circle_radius),
+            int(self.center_x + self.main_circle_radius),
+            grid_size
+        )
+        y_range = range(
+            int(self.center_y - self.main_circle_radius),
+            int(self.center_y + self.main_circle_radius),
+            grid_size
+        )
+        
+        for y in y_range:
+            for x in x_range:
                 if region_checker(x, y):
-                    grid_positions.append((x, y))
+                    # Add slight randomization to grid positions
+                    jitter = grid_size * 0.25
+                    x_jitter = x + random.uniform(-jitter, jitter)
+                    y_jitter = y + random.uniform(-jitter, jitter)
+                    grid_positions.append((x_jitter, y_jitter))
         
         random.shuffle(grid_positions)
         positions = grid_positions
         
-        max_attempts = 1000
+        max_attempts = 2000  # Increased for better coverage
         attempts = 0
         
         while attempts < max_attempts and len(circles) < target_circles:
             if not positions:
-                break
+                # Generate new positions around existing circles
+                positions = []
+                for (cx, cy), cr in circles:
+                    for angle in range(0, 360, 30):  # More angles for tighter packing
+                        rad = math.radians(angle)
+                        for dist_factor in [1.0, 1.1, 1.2]:  # Tighter distance factors
+                            new_x = cx + math.cos(rad) * (cr * 2 + spacing) * dist_factor
+                            new_y = cy + math.sin(rad) * (cr * 2 + spacing) * dist_factor
+                            if region_checker(new_x, new_y):
+                                positions.append((new_x, new_y))
                 
+                if not positions:
+                    break
+                random.shuffle(positions)
+            
             # Select radius based on current distribution
             radius = self.select_next_radius(circles, target_circles, positions)
             
             # Try each position
+            success = False
             for x, y in positions[:]:
                 pos_key = (round(x/grid_size), round(y/grid_size))
                 if pos_key not in attempted_positions:
                     attempted_positions.add(pos_key)
                     
-                    if self.check_position(x, y, radius, circles):
+                    if self.check_position(x, y, radius, circles, number_circles, is_number_region, spacing):
                         circles.append(((x, y), radius))
                         positions.remove((x, y))
+                        success = True
                         
                         # Add new positions around this circle
-                        for angle in range(0, 360, 45):
+                        for angle in range(0, 360, 30):
                             rad = math.radians(angle)
-                            new_x = x + math.cos(rad) * (radius * 2.2)
-                            new_y = y + math.sin(rad) * (radius * 2.2)
-                            if region_checker(new_x, new_y):
-                                positions.append((new_x, new_y))
-                        
+                            for dist_factor in [1.0, 1.1, 1.2]:
+                                new_x = x + math.cos(rad) * (radius * 2 + spacing) * dist_factor
+                                new_y = y + math.sin(rad) * (radius * 2 + spacing) * dist_factor
+                                if region_checker(new_x, new_y):
+                                    positions.append((new_x, new_y))
                         break
             
-            attempts += 1
+            if not success:
+                attempts += 1
             
             # Shuffle remaining positions periodically
             if attempts % 50 == 0:
@@ -689,12 +738,12 @@ class IshiharaPlateGenerator:
         return circles
 
     def pack_circles(self):
-        """Pack both regions with fixed termination"""
-        # Pack number region
+        """Pack circles with strict boundary enforcement"""
+        # First pack the number region
         number_circles = self.pack_region(is_number_region=True)
         
-        # Pack background region
-        background_circles = self.pack_region(is_number_region=False)
+        # Then pack the background with reference to number circles
+        background_circles = self.pack_region(number_circles, is_number_region=False)
         
         # Convert to physics bodies
         circles = []
