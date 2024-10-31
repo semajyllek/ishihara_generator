@@ -34,7 +34,13 @@ DEMO_NUMBER = 5
 
 class IshiharaPlateGenerator:
     def __init__(self, palette_manager: Optional[PaletteManager] = None, num: int = DEMO_NUMBER):
+
+        # creates binary grids with stylistic integer mask
+        self.renderer = DigitRenderer(font_size=FONT_SIZE, debug=True)
+        self.bin_num = self.renderer.digit_to_grid(digit=num, size=GRID_SIZE)
+
         
+        # circle sizes and positions
         self.main_circle_radius = LARGE_CIRCLE_DIAMETER // 2
         self.small_circle_radii = [d // 2 for d in SMALL_CIRCLE_DIAMETERS]
         self.max_small_radius = max(self.small_circle_radii)
@@ -45,6 +51,10 @@ class IshiharaPlateGenerator:
         self.width = LARGE_CIRCLE_DIAMETER + 200
         self.height = LARGE_CIRCLE_DIAMETER + 200
 
+        self.center_x = self.width // 2
+        self.center_y = self.height // 2
+
+        # physics simulation params
         self.space = pymunk.Space()
         self.space.gravity = (0.0, 900.0)
 
@@ -52,8 +62,8 @@ class IshiharaPlateGenerator:
         self.space.collision_bias = pow(1.0 - 0.3, 60.0)
         self.space.iterations = 30
 
-        self.center_x = self.width // 2
-        self.center_y = self.height // 2
+      
+        # color palette  
         self.palette_manager = palette_manager or PaletteManager()
         selected_palette = self.palette_manager.get_random_palette()
         
@@ -61,16 +71,11 @@ class IshiharaPlateGenerator:
         self.figure_colors = selected_palette.colors.figure
         self.border_color = selected_palette.colors.border
         self.background_base = selected_palette.colors.background_base
-        
 
         self.current_bg_color_index = 0
         self.current_fg_color_index = 0
 
         self.create_boundary()
-
-        # creates binary grids with stylistic integer masks
-        self.renderer = DigitRenderer(font_size=FONT_SIZE, debug=True)
-        self.bin_num = self.renderer.digit_to_grid(digit=num, size=GRID_SIZE)
 
     def get_next_background_color(self):
         color = self.background_colors[self.current_bg_color_index]
@@ -320,29 +325,6 @@ class IshiharaPlateGenerator:
         """Get only the circles that are inside the main circle"""
         return [(c, r) for c, r in circles 
                 if self.is_inside_main_circle(c.body.position.x, c.body.position.y)]
-    
-    def generate_plate(self):
-        # Adjust physics parameters for better spacing
-        self.space.iterations = 50
-        self.space.collision_slop = 0.001
-        
-        circles = self.run_physics_simulation()
-        img, mask, mask_draw, circles_img, circles_draw = self.create_initial_images()
-        
-        self.draw_base_circle(circles_draw)
-        self.create_circle_mask(mask_draw)
-        
-        circle_regions = self.organize_circles_by_position(circles)
-        self.draw_circles(circles_draw, circle_regions)
-        
-        # Add texture before final composition
-        self.add_subtle_texture(circles_img)
-        
-        img.paste(circles_img, (0, 0), mask)
-        self.draw_bold_border(ImageDraw.Draw(img))
-        
-        inside_circles = self.get_inside_circles(circles)
-        return img, inside_circles
 
 
     def run_physics_simulation(self):
@@ -394,18 +376,54 @@ class IshiharaPlateGenerator:
         b = int(b * factor)
 
         return f'#{r:02x}{g:02x}{b:02x}'
+    
 
+    def generate_plate(self):
+        # Adjust physics parameters for better spacing
+        self.space.iterations = 50
+        self.space.collision_slop = 0.001
+        
+        # Run physics simulation to place circles
+        circles = self.run_physics_simulation()
 
+        # Create images and drawing objects
+        img, mask, mask_draw, circles_img, circles_draw = self.create_initial_images()
+        
+        # Draw the main circle and inner ring
+        self.draw_base_circle(circles_draw)
+        self.create_circle_mask(mask_draw)
+        
+        # Draw the decorative rings
+        circle_regions = self.organize_circles_by_position(circles)
+        self.draw_circles(circles_draw, circle_regions)
+        
+        # Add texture before final composition
+        #self.add_subtle_texture(circles_img)
+        
+        # Combine all images
+        img.paste(circles_img, (0, 0), mask)
 
+        # Draw the bold black border
+        self.draw_bold_border(ImageDraw.Draw(img))
+        
+        # Get only the circles that are inside the main circle
+        inside_circles = self.get_inside_circles(circles)
 
-
+        return img, inside_circles
 
 
 
 # api
 def generate_ishihara_plate(num: int = 5):
-    palette_manager = PaletteManager()
-    generator = IshiharaPlateGenerator(palette_manager, num=num)
+    generator = IshiharaPlateGenerator(num=num)
     image, circles = generator.generate_plate()
     return image, circles
+
+
+
+if __name__ == '__main__':
+    # Each time you generate a plate, it will use fresh, harmonious colors
+    n = 7
+    image, circles = generate_ishihara_plate(7)
+    image.show()
 
