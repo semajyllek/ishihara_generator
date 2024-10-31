@@ -130,18 +130,17 @@ class IshiharaPlateGenerator:
             return self.bin_num[grid_y, grid_x] == 1
         return False
     
-
     def add_circles_batch(self, num_circles):
         """Modified circle placement that accounts for ring space"""
         circles = []
         golden_ratio = (1 + 5 ** 0.5) / 2
         
         for i in range(num_circles):
-            visual_radius = random.choice(self.small_circle_radii)
+            radius = random.choice(self.small_circle_radii)
             
-            # Physics radius must include both the circle and its white ring
-            ring_space = visual_radius * 0.08  # 8% for the white ring
-            physics_radius = visual_radius + ring_space
+            # Add extra space for the white ring
+            ring_space = radius * 0.08  # Same as visual ring thickness
+            physics_radius = radius + ring_space
             
             angle = i * golden_ratio * 2 * math.pi
             r = random.uniform(0, self.rect_width * 0.45)
@@ -154,15 +153,15 @@ class IshiharaPlateGenerator:
             body = pymunk.Body(mass, moment)
             body.position = x, y
             
-            # Use the larger physics radius for collision detection
+            # Use the larger radius for collision detection
             shape = pymunk.Circle(body, physics_radius)
             shape.friction = 0.7
             shape.elasticity = 0.1
             shape.collision_type = 1
             
             self.space.add(body, shape)
-            # Store the visual radius for drawing
-            circles.append((shape, visual_radius))
+            # Store the visual radius (without ring space) for drawing
+            circles.append((shape, radius))
         
         return circles
 
@@ -193,6 +192,7 @@ class IshiharaPlateGenerator:
                 pos.x + radius,
                 pos.y + radius
             ], fill=color)
+
 
     def run_physics_simulation(self):
         """Optimized physics simulation"""
