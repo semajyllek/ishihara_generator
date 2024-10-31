@@ -196,14 +196,71 @@ class IshiharaPlateGenerator:
             
         return score
 
+    def calculate_settling_iterations(self, circles):
+        """Calculate appropriate number of physics simulation iterations"""
+        # Base number of iterations
+        base_iterations = 30
+        
+        # Count circles near edges and in critical areas
+        edge_circles = 0
+        critical_circles = 0
+        
+        for circle, radius in circles:
+            pos = circle.body.position
+            
+            # Check if circle is near edge
+            if self.is_near_number_edge(pos.x, pos.y):
+                edge_circles += 1
+            
+            # Check if circle is in a critical area (intersections or tight spaces)
+            if self.is_critical_position(pos.x, pos.y):
+                critical_circles += 1
+        
+        # Add iterations based on circle positions
+        edge_factor = (edge_circles / len(circles)) if circles else 0
+        critical_factor = (critical_circles / len(circles)) if circles else 0
+        
+        # Calculate total iterations
+        total_iterations = base_iterations
+        total_iterations += int(edge_factor * 20)  # Up to 20 extra iterations for edge circles
+        total_iterations += int(critical_factor * 15)  # Up to 15 extra iterations for critical circles
+        
+        return total_iterations
+
+    def is_critical_position(self, x, y):
+        """Check if position is in a critical area requiring more careful settling"""
+        critical = False
+        check_radius = self.max_small_radius * 2
+        
+        # Check surrounding points for tight spaces or intersections
+        for angle in range(0, 360, 45):
+            rad = math.radians(angle)
+            check_x = x + check_radius * math.cos(rad)
+            check_y = y + check_radius * math.sin(rad)
+            
+            # Position is critical if it's near intersections of number regions
+            number_state = self.is_inside_number(x, y)
+            check_state = self.is_inside_number(check_x, check_y)
+            
+            if number_state != check_state:
+                critical = True
+                break
+            
+            # Also critical if near the main circle edge
+            dist_to_center = math.sqrt((x - self.center_x)**2 + (y - self.center_y)**2)
+            if abs(dist_to_center - self.main_circle_radius) < check_radius:
+                critical = True
+                break
+        
+        return critical
+    
     def run_physics_simulation(self):
-        """Enhanced physics simulation with adaptive circle placement"""
+        """Modified physics simulation with proper iteration calculation"""
         circles = []
         batch_size = 50
-        max_batches = 50  # Increased from 40
-        coverage_threshold = 0.85  # Target coverage ratio
+        max_batches = 50
+        coverage_threshold = 0.85
         
-        # Track areas that need more circles
         uncovered_regions = set()
         
         for batch in range(max_batches):
@@ -211,17 +268,16 @@ class IshiharaPlateGenerator:
             coverage = self.analyze_coverage(circles)
             if coverage >= coverage_threshold:
                 break
-                
-            # Adjust batch placement based on coverage analysis
+            
+            # Add circles based on current coverage
             if batch > max_batches // 2:
-                # Focus on filling gaps in later batches
                 new_circles = self.add_targeted_circles_batch(batch_size // 2, uncovered_regions)
             else:
                 new_circles = self.add_circles_batch(batch_size)
-                
+            
             circles.extend(new_circles)
             
-            # Run physics simulation with adaptive settling
+            # Calculate and run settling iterations
             settling_iterations = self.calculate_settling_iterations(new_circles)
             for _ in range(settling_iterations):
                 self.space.step(1/60.0)
@@ -236,6 +292,7 @@ class IshiharaPlateGenerator:
             self.space.step(1/60.0)
         
         return circles
+
 
     def analyze_coverage(self, circles):
         """Analyze current coverage of the number"""
