@@ -19,31 +19,20 @@ from typing import Optional
 import random
 
 from .palette_manager import PaletteManager
-
+from .inttogrid import DigitRenderer
 from .number_grids import NUMBER_FIVE
-
-
 
 # Fixed constants for circle sizes
 LARGE_CIRCLE_DIAMETER = 800  # pixels
 SMALL_CIRCLE_DIAMETERS = [40, 44, 48, 52]  # pixels
 
 
-
-
-# Modified IshiharaPlateGenerator initialization
 class IshiharaPlateGenerator:
     def __init__(self, palette_manager: Optional[PaletteManager] = None):
-        # ... other initialization code ...
         
-       
-        self.current_bg_color_index = 0
-        self.current_fg_color_index = 0
-
-
-
-class IshiharaPlateGenerator:
-    def __init__(self, palette_manager: Optional[PaletteManager] = None):
+        # creates binary grids with stylistic integer masks
+        self.renderer = DigitRenderer(font_size=128, debug=True)
+        
         self.main_circle_radius = LARGE_CIRCLE_DIAMETER // 2
         self.small_circle_radii = [d // 2 for d in SMALL_CIRCLE_DIAMETERS]
         self.max_small_radius = max(self.small_circle_radii)
@@ -233,6 +222,8 @@ class IshiharaPlateGenerator:
                 color = self.adjust_color(base_color, angle, dist)
                 self.draw_circle_with_gradient(circles_draw, pos, radius, color)
 
+
+
     def generate_plate(self):
         """Main method to generate the Ishihara plate"""
         # Run physics simulation (previous code remains the same)
@@ -320,9 +311,11 @@ def generate_ishihara_background():
     return image, circles
 
 # Usage example:
-def generate_ishihara_plate():
+def generate_ishihara_plate(n: int = 5):
     palette_manager = PaletteManager('palettes.yaml')
     generator = IshiharaPlateGenerator(palette_manager)
-    image, circles = generator.generate_plate()
+    grid_size = (LARGE_CIRCLE_DIAMETER // 2) / 10
+    bin_num = generator.renderer.digit_to_grid(number=n, size=grid_size)
+    image, circles = generator.generate_plate(bin_num)
     return image, circles
 
