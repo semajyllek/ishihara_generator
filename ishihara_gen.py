@@ -6,6 +6,9 @@ import math
 import random
 import numpy as np
 
+from functools import lru_cache
+from scipy.ndimage import binary_dilation
+
 
 import pymunk
 import pymunk.pygame_util
@@ -34,9 +37,16 @@ FONT_URL = 'https://www.1001fonts.com/download/niconne.zip'
 class IshiharaPlateGenerator:
     def __init__(self, num: int = DEMO_NUMBER, font_zip_url: Optional[str] = FONT_URL):
 
+
         # creates binary grids with stylistic integer mask
         self.renderer = DigitRenderer(font_size=FONT_SIZE, font_path=get_tff(font_zip_url))
         self.bin_num = self.renderer.digit_to_grid(digit=num, size=GRID_SIZE)
+
+         # Pre-compute the dilated number mask for faster edge checking
+        self.dilated_mask = binary_dilation(self.bin_num, iterations=2)
+        
+        # Pre-compute the transformed coordinates for number checking
+        self.setup_number_transform()
 
         
         # circle sizes and positions
@@ -75,6 +85,18 @@ class IshiharaPlateGenerator:
 
         self.create_boundary()
 
+    def setup_number_transform(self):
+        """Pre-compute coordinate transformation matrices for number checking"""
+        number_width = self.main_circle_radius * 1.4
+        number_height = self.main_circle_radius * 1.4
+        
+        self.number_x = self.center_x - number_width/2
+        self.number_y = self.center_y - number_height/2 - self.main_circle_radius * 0.1
+        
+        self.x_scale = number_width / self.bin_num.shape[1]
+        self.y_scale = number_height / self.bin_num.shape[0]
+
+
     def get_next_background_color(self):
         color = self.background_colors[self.current_bg_color_index]
         self.current_bg_color_index = (self.current_bg_color_index + 1) % len(self.background_colors)
@@ -85,55 +107,23 @@ class IshiharaPlateGenerator:
         self.current_fg_color_index = (self.current_fg_color_index + 1) % len(self.figure_colors)
         return color
 
+    @lru_cache(maxsize=1024)
     def is_inside_main_circle(self, x, y):
+        """Cached version of circle boundary check"""
         dx = x - self.center_x
         dy = y - self.center_y
         return dx*dx + dy*dy <= self.main_circle_radius * self.main_circle_radius
 
-
     def is_inside_number(self, x, y):
-        """
-        Enhanced number boundary checking with edge detection.
-        """
-        # Make mask slightly smaller for tighter fit
-        number_width = self.main_circle_radius * 1.7  
-        number_height = self.main_circle_radius * 1.7
+        """Optimized number boundary checking"""
+        # Convert to grid coordinates using pre-computed transforms
+        grid_x = int((x - self.number_x) / self.x_scale)
+        grid_y = int((y - self.number_y) / self.y_scale)
         
-        # Center the number with slight upward shift
-        number_x = self.center_x - number_width/2
-        number_y = self.center_y - number_height/2 - self.main_circle_radius * 0.1
-        
-        # Convert point to grid coordinates with sub-pixel precision
-        grid_x_float = (x - number_x) / (number_width / self.bin_num.shape[1])
-        grid_y_float = (y - number_y) / (number_height / self.bin_num.shape[0])
-        
-        # Get the four nearest grid points
-        grid_x1, grid_x2 = int(grid_x_float), min(int(grid_x_float) + 1, self.bin_num.shape[1] - 1)
-        grid_y1, grid_y2 = int(grid_y_float), min(int(grid_y_float) + 1, self.bin_num.shape[0] - 1)
-        
-        # Check if any of the four nearest points are part of the number
-        if (0 <= grid_x1 < self.bin_num.shape[1] and 
-            0 <= grid_y1 < self.bin_num.shape[0]):
-            # Calculate interpolation weights
-            fx = grid_x_float - grid_x1
-            fy = grid_y_float - grid_y1
-            
-            # Bilinear interpolation of the binary mask
-            v1 = self.bin_num[grid_y1, grid_x1]
-            v2 = self.bin_num[grid_y1, grid_x2] if grid_x2 < self.bin_num.shape[1] else v1
-            v3 = self.bin_num[grid_y2, grid_x1] if grid_y2 < self.bin_num.shape[0] else v1
-            v4 = self.bin_num[grid_y2, grid_x2] if (grid_x2 < self.bin_num.shape[1] and 
-                                                grid_y2 < self.bin_num.shape[0]) else v1
-            
-            # Interpolate
-            value = (v1 * (1-fx) * (1-fy) + 
-                    v2 * fx * (1-fy) + 
-                    v3 * (1-fx) * fy + 
-                    v4 * fx * fy)
-            
-            # Use a threshold for smoother edges
-            return value > 0.5
+        if 0 <= grid_x < self.bin_num.shape[1] and 0 <= grid_y < self.bin_num.shape[0]:
+            return self.bin_num[grid_y, grid_x] == 1
         return False
+  
 
     def add_circles_batch(self, num_circles):
         """Modified circle placement that accounts for ring space"""
@@ -199,64 +189,36 @@ class IshiharaPlateGenerator:
             ], fill=color)
 
     def run_physics_simulation(self):
-        """Enhanced physics simulation with density-aware settling"""
+        """Optimized physics simulation"""
         circles = []
-        batch_size = 50
-        batches = 0
-        max_batches = 40
+        batch_size = 100  # Larger batches for better performance
+        total_circles_needed = 2000  # Target number of circles
+        settling_steps = 20  # Reduced settling steps
         
-        # Dynamic settling iterations based on circle position
-        base_settling_iterations = 30
-        edge_settling_iterations = 45
+        # Pre-allocate space for circle positions
+        circle_positions = np.zeros((total_circles_needed, 2))
+        current_index = 0
         
-        while batches < max_batches:
+        while current_index < total_circles_needed:
             new_circles = self.add_circles_batch(batch_size)
-            circles.extend(new_circles)
             
-            # Count circles near edges for adaptive settling
-            edge_circles = sum(1 for circle, _ in new_circles 
-                            if self.is_near_number_edge(circle.body.position.x, 
-                                                    circle.body.position.y))
+            # Batch physics updates
+            for _ in range(settling_steps):
+                self.space.step(1/30.0)  # Reduced precision for speed
             
-            # Adjust settling iterations based on edge circle ratio
-            edge_ratio = edge_circles / len(new_circles)
-            settling_iterations = int(base_settling_iterations + 
-                                    (edge_settling_iterations - base_settling_iterations) * edge_ratio)
-            
-            # More iterations where needed
-            for _ in range(settling_iterations):
-                self.space.step(1/60.0)
-                
-                # Apply additional forces to circles near edges
-                for circle, radius in new_circles:
-                    pos = circle.body.position
-                    if self.is_near_number_edge(pos.x, pos.y):
-                        # Add a small attractive force toward the nearest number edge
-                        center_angle = math.atan2(self.center_y - pos.y, 
-                                                self.center_x - pos.x)
-                        
-                        # Vary force based on position
-                        base_force = 100.0
-                        if self.is_inside_number(pos.x, pos.y):
-                            force = base_force * 0.7  # Weaker force inside number
-                        else:
-                            force = base_force * 1.2  # Stronger force outside number
-                        
-                        circle.body.apply_force_at_local_point((
-                            math.cos(center_angle) * force,
-                            math.sin(center_angle) * force
-                        ))
-            
-            batches += 1
+            # Store only circles that are within bounds
+            for circle, radius in new_circles:
+                pos = circle.body.position
+                if self.is_inside_main_circle(pos.x, pos.y):
+                    circles.append((circle, radius))
+                    circle_positions[current_index] = [pos.x, pos.y]
+                    current_index += 1
+                    if current_index >= total_circles_needed:
+                        break
         
-        # Final settling phase with adaptive timing
-        edge_circle_count = sum(1 for circle, _ in circles 
-                            if self.is_near_number_edge(circle.body.position.x, 
-                                                        circle.body.position.y))
-        final_settling_time = int(120 + (edge_circle_count / len(circles)) * 60)
-        
-        for _ in range(final_settling_time):
-            self.space.step(1/60.0)
+        # Final quick settling
+        for _ in range(60):  # Reduced final settling time
+            self.space.step(1/30.0)
         
         return circles
 
@@ -453,37 +415,52 @@ class IshiharaPlateGenerator:
     
 
     def generate_plate(self):
-        # Adjust physics parameters for better spacing
-        self.space.iterations = 50
-        self.space.collision_slop = 0.001
+        """Optimized plate generation"""
+        self.space.iterations = 20  # Reduced iterations
         
-        # Run physics simulation to place circles
+        # Run physics simulation
         circles = self.run_physics_simulation()
-
-        # Create images and drawing objects
-        img, mask, mask_draw, circles_img, circles_draw = self.create_initial_images()
         
-        # Draw the main circle and inner ring
+        # Create images
+        img = Image.new('RGB', (self.width, self.height), 'white')
+        mask = Image.new('L', (self.width, self.height), 0)
+        circles_img = Image.new('RGB', (self.width, self.height), self.background_base)
+        
+        # Use faster drawing contexts
+        mask_draw = ImageDraw.Draw(mask)
+        circles_draw = ImageDraw.Draw(circles_img)
+        
+        # Draw base elements
         self.draw_base_circle(circles_draw)
         self.create_circle_mask(mask_draw)
         
-        # Draw the decorative rings
-        circle_regions = self.organize_circles_by_position(circles)
-        self.draw_circles(circles_draw, circle_regions)
+        # Batch process circles by color
+        figure_circles = []
+        background_circles = []
         
-        # Add texture before final composition
-        self.add_subtle_texture(circles_img)
+        for circle, radius in circles:
+            pos = circle.body.position
+            if self.is_inside_number(pos.x, pos.y):
+                figure_circles.append((pos, radius))
+            else:
+                background_circles.append((pos, radius))
         
-        # Combine all images
+        # Draw circles by color groups
+        for circles_group, color in [
+            (background_circles, self.get_next_background_color()),
+            (figure_circles, self.get_next_figure_color())
+        ]:
+            for pos, radius in circles_group:
+                self.draw_circle_with_gradient(circles_draw, pos, radius, color)
+        
+        # Composite images
         img.paste(circles_img, (0, 0), mask)
-
-        # Draw the bold black border
-        self.draw_bold_border(ImageDraw.Draw(img))
         
-        # Get only the circles that are inside the main circle
-        inside_circles = self.get_inside_circles(circles)
-
-        return img, inside_circles
+        # Draw border
+        final_draw = ImageDraw.Draw(img)
+        self.draw_bold_border(final_draw)
+        
+        return img, circles
 
 
 # api
