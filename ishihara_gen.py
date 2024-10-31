@@ -33,10 +33,10 @@ FONT_URL = 'https://www.1001fonts.com/download/buffalo-nickel.zip'
 
 
 class IshiharaPlateGenerator:
-    def __init__(self, num: int = DEMO_NUMBER):
+    def __init__(self, num: int = DEMO_NUMBER, font_zip_url: Optional[str] = FONT_URL):
 
         # creates binary grids with stylistic integer mask
-        self.renderer = DigitRenderer(font_size=FONT_SIZE, font_path=get_tff(FONT_URL))
+        self.renderer = DigitRenderer(font_size=FONT_SIZE, font_path=get_tff(font_zip_url))
         self.bin_num = self.renderer.digit_to_grid(digit=num, size=GRID_SIZE)
 
         
@@ -412,8 +412,8 @@ class IshiharaPlateGenerator:
 
 
 # api
-def generate_ishihara_plate(num: int = 5):
-    generator = IshiharaPlateGenerator(num=num)
+def generate_ishihara_plate(num: int = 5, font_zip_url: Optional[str] = None):
+    generator = IshiharaPlateGenerator(num=num, font_zip_url=font_zip_url)
     image, circles = generator.generate_plate()
     return image, circles
 
