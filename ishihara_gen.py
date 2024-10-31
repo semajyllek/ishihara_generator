@@ -141,6 +141,127 @@ class IshiharaPlateGenerator:
             self.center_y + self.main_circle_radius
         ], fill=255)
 
+    def add_circles_batch(self, num_circles):
+        """Adaptive circle placement that chooses appropriate sizes for spaces"""
+        circles = []
+        golden_ratio = (1 + 5 ** 0.5) / 2
+        
+        # Sort radii from largest to smallest for better space filling
+        available_radii = sorted(self.small_circle_radii, reverse=True)
+        
+        for i in range(num_circles):
+            angle = i * golden_ratio * 2 * math.pi
+            r = math.sqrt(i / num_circles) * self.rect_width * 0.45
+            
+            # Calculate initial position
+            x = self.center_x + r * math.cos(angle)
+            y = self.center_y + r * math.sin(angle) - self.rect_height//4
+            
+            # Find the largest circle that fits at this position
+            chosen_radius = self.find_best_circle_size(x, y, available_radii)
+            
+            if chosen_radius:
+                ring_space = chosen_radius * 0.08
+                physics_radius = chosen_radius + ring_space
+                
+                mass = 1.0
+                moment = pymunk.moment_for_circle(mass, 0, physics_radius)
+                body = pymunk.Body(mass, moment)
+                body.position = x, y
+                
+                shape = pymunk.Circle(body, physics_radius)
+                shape.friction = 0.8
+                shape.elasticity = 0.1
+                shape.collision_type = 1
+                
+                self.space.add(body, shape)
+                circles.append((shape, chosen_radius))
+        
+        return circles
+
+    def find_best_circle_size(self, x, y, available_radii):
+        """Find the largest circle that fits at the given position"""
+        # Check existing circles in the space
+        existing_circles = [s for s in self.space.shapes if isinstance(s, pymunk.Circle)]
+        
+        for radius in available_radii:
+            fits = True
+            
+            # Check if too close to existing circles
+            for shape in existing_circles:
+                other_pos = shape.body.position
+                min_dist = radius + shape.radius + 2  # Small gap between circles
+                actual_dist = math.sqrt((x - other_pos.x)**2 + (y - other_pos.y)**2)
+                
+                if actual_dist < min_dist:
+                    fits = False
+                    break
+            
+            # If it fits, return this radius
+            if fits:
+                return radius
+        
+        # If no size fits, return the smallest radius
+        return available_radii[-1]
+
+    def run_physics_simulation(self):
+        """Modified physics simulation with fewer, better-sized circles"""
+        circles = []
+        batch_size = 40  # Reduced batch size since we're using space more efficiently
+        batches = 0
+        max_batches = 30  # Fewer batches needed
+        
+        while batches < max_batches:
+            new_circles = self.add_circles_batch(batch_size)
+            if not new_circles:  # If no new circles could be added
+                break
+                
+            circles.extend(new_circles)
+            
+            # Settling physics
+            for _ in range(45):
+                self.space.step(1/60.0)
+                
+                # Gentle downward force
+                for circle, _ in new_circles:
+                    circle.body.apply_force_at_local_point((0, 300.0), (0, 0))
+            
+            batches += 1
+            
+            # Check coverage after each batch
+            if self.check_coverage(circles) > 0.90:  # 90% coverage is good
+                break
+        
+        # Final settling
+        for _ in range(90):
+            self.space.step(1/60.0)
+        
+        return circles
+    
+    def check_coverage(self, circles):
+        """Check what percentage of the number is covered by circles"""
+        coverage_points = 0
+        total_points = 0
+        
+        # Sample points in the number area
+        for y in range(self.bin_num.shape[0]):
+            for x in range(self.bin_num.shape[1]):
+                if self.bin_num[y][x]:
+                    total_points += 1
+                    
+                    # Convert grid position to world coordinates
+                    world_x = self.number_x + (x + 0.5) * (self.number_width / self.bin_num.shape[1])
+                    world_y = self.number_y + (y + 0.5) * (self.number_height / self.bin_num.shape[0])
+                    
+                    # Check if point is covered by any circle
+                    for circle, radius in circles:
+                        pos = circle.body.position
+                        if (world_x - pos.x)**2 + (world_y - pos.y)**2 <= radius**2:
+                            coverage_points += 1
+                            break
+        
+        return coverage_points / total_points if total_points > 0 else 0
+
     def draw_circle_with_gradient(self, draw, pos, radius, color):
         """Draw a non-overlapping circle with white ring"""
         try:
@@ -258,28 +379,6 @@ class IshiharaPlateGenerator:
                 self.center_x + self.main_circle_radius + i,
                 self.center_y + self.main_circle_radius + i
             ], fill=None, outline='black', width=3)
-
-    def analyze_coverage(self, circles):
-        """Analyze current coverage of the number"""
-        grid_size = 20
-        covered_points = set()
-        total_points = 0
-        
-        for y in range(grid_size):
-            for x in range(grid_size):
-                if self.bin_num[y, x]:
-                    total_points += 1
-                    point_x = self.number_x + (x + 0.5) * (self.number_width / grid_size)
-                    point_y = self.number_y + (y + 0.5) * (self.number_height / grid_size)
-                    
-                    for circle, radius in circles:
-                        pos = circle.body.position
-                        if (pos.x - point_x) ** 2 + (pos.y - point_y) ** 2 <= radius ** 2:
-                            covered_points.add((x, y))
-                            break
-        
-        return len(covered_points) / total_points if total_points > 0 else 0
-
 
     def generate_plate(self):
         """Optimized plate generation"""
