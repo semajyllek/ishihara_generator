@@ -528,16 +528,27 @@ class IshiharaPlateGenerator:
 
 
     def draw_circles(self, circles_draw, circle_regions):
-        """Draw all circles with enhanced visual effects"""
-        for circle, radius, angle, dist in circle_regions:
+        """Draw circles with simpler but more diverse color distribution"""
+        # Reset color indices at start
+        self.current_bg_color_index = 0
+        self.current_fg_color_index = 0
+        
+        # Shuffle the circle order before drawing to break up patterns
+        random.shuffle(circle_regions)
+        
+        for circle, radius in circle_regions:
             pos = circle.body.position
             if self.is_inside_main_circle(pos.x, pos.y):
                 if self.is_inside_number(pos.x, pos.y):
-                    base_color = self.get_next_figure_color()
+                    # Cycle through figure colors more frequently
+                    color = self.figure_colors[self.current_fg_color_index]
+                    self.current_fg_color_index = (self.current_fg_color_index + 2) % len(self.figure_colors)
                 else:
-                    base_color = self.get_next_background_color()
+                    # Cycle through background colors more frequently
+                    color = self.background_colors[self.current_bg_color_index]
+                    self.current_bg_color_index = (self.current_bg_color_index + 2) % len(self.background_colors)
                 
-                self.draw_circle_with_gradient(circles_draw, pos, radius, base_color)
+                self.draw_circle_with_gradient(circles_draw, pos, radius, color)
 
 
     def draw_base_circle(self, draw):
