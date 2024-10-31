@@ -27,7 +27,8 @@ def get_tff(zip_url, extract_to="/usr/share/fonts/truetype/"):
         os.makedirs(extract_to, exist_ok=True)
 
         # Download the zip file
-        zip_file_path = "damion.zip"  # Local name for the zip file
+        root = Path(extract_to)
+        zip_file_path = f"{root}.zip"  # Local name for the zip file
         urlretrieve(zip_url, zip_file_path)
 
         # Extract the zip file
