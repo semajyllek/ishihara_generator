@@ -34,10 +34,9 @@ class Palette:
     metadata: Metadata
 
 class PaletteManager:
-    def __init__(self, palette_path: Path = PALETTE_PATH):
-        self.palette_path = palette_path
-        self.palettes: Dict[str, Palette] = {}
-        self.load_palettes()
+    def __init__(self, palette_path: Path = None):
+        # If no path provided, use the default PALETTE_PATH
+        self.palette_path = palette_path if palette_path is not None else PALETTE_PATH
 
     def load_palettes(self):
         """Load palettes from YAML file"""
