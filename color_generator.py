@@ -39,7 +39,7 @@ class ColorPaletteGenerator:
         figure_hue = (background_hue + 180) % 360
         
         # Create base complementary color
-        base_color = Color(hsl=(figure_hue/360, 0.8, 0.45))
+        base_color = Color(HLS=(figure_hue/360, 0.8, 0.45))
         colors.append(base_color)
         
         # Generate variations
