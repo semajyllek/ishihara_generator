@@ -35,7 +35,7 @@ class IshiharaPlateGenerator:
         # creates binary grids with stylistic integer mask
         if font_path is None:
             font_path = get_damion_tff()
-            
+
         self.bin_num = generate_binary_image_with_font(num=num, font_path=font_path, size=GRID_SIZE)
         
         # circle sizes and positions

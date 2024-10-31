@@ -111,5 +111,5 @@ def generate_binary_image_with_font(num, font_path, font_size=FONT_SIZE, size=SI
     """
     img = number_to_image(num, font_path, font_size, image_size=(size, size))
     img_grid = image_to_binary_grid(img)
-    return img_grid, img
+    return img_grid
            
