@@ -25,7 +25,7 @@ from .number_grids import NUMBER_FIVE
 # Fixed constants for circle sizes
 LARGE_CIRCLE_DIAMETER = 800  # pixels
 SMALL_CIRCLE_DIAMETERS = [40, 44, 48, 52]  # pixels
-GRID_SIZE = LARGE_CIRCLE_DIAMETER // 20
+GRID_SIZE = 20
 FONT_SIZE = 128
 DEMO_NUMBER = 5
 
