@@ -4,6 +4,14 @@ import numpy as np
 import colorsys
 
 class ColorPaletteGenerator:
+    @staticmethod
+    def rgb_to_hex(RGB):
+        """Convert RGB values (0-1) to hex color string"""
+        return '#{:02x}{:02x}{:02x}'.format(
+            int(RGB[0] * 255),
+            int(RGB[1] * 255),
+            int(RGB[2] * 255)
+        )
     def create_color(self, h, s, l):
         """Create a Color object with all required color spaces"""
         RGB = colorsys.hls_to_rgb(h, l, s)
