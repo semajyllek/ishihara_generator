@@ -172,7 +172,7 @@ class IshiharaPlateGenerator:
                 self.center_y - outer_ring_radius - i,
                 self.center_x + outer_ring_radius + i,
                 self.center_y + outer_ring_radius + i
-            ], fill=None, outline='black', width=2)
+            ], fill=None, outline='black', width=5)
 
         # The rest remains the same
         draw.ellipse([
