@@ -64,11 +64,11 @@ class IshiharaPlateGenerator:
         self.palette_manager = palette_manager or PaletteManager()
         selected_palette = self.palette_manager.get_random_palette()
         
-        self.background_colors = selected_palette.colors.background
-        self.figure_colors = selected_palette.colors.figure
-        self.border_color = selected_palette.colors.border
-        self.background_base = selected_palette.colors.background_base
-
+        self.background_colors = selected_palette['colors']['background']
+        self.figure_colors = selected_palette['colors']['figure']
+        self.border_color = selected_palette['colors']['border']
+        self.background_base = selected_palette['colors']['background_base']
+        
         self.current_bg_color_index = 0
         self.current_fg_color_index = 0
 
