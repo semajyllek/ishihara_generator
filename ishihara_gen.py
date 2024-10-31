@@ -189,7 +189,7 @@ class IshiharaPlateGenerator:
             self.center_x + inner_ring_radius,
             self.center_y + inner_ring_radius
         ], fill=None, outline=self.border_color, width=2)
-        
+
     def organize_circles_by_position(self, circles):
         """Group and sort circles by their position for better color distribution"""
         circle_regions = []
@@ -227,19 +227,26 @@ class IshiharaPlateGenerator:
                 self.draw_circle_with_gradient(circles_draw, pos, radius, color)
 
 
+    def draw_base_circle(self, draw):
+        """Draw the main background circle and inner decorative ring"""
+        draw.ellipse([
+            self.center_x - self.main_circle_radius,
+            self.center_y - self.main_circle_radius,
+            self.center_x + self.main_circle_radius,
+            self.center_y + self.main_circle_radius
+        ], fill=self.background_base)
+        
+        # Inner decorative ring
+        inner_ring_radius = self.main_circle_radius - 20
+        draw.ellipse([
+            self.center_x - inner_ring_radius,
+            self.center_y - inner_ring_radius,
+            self.center_x + inner_ring_radius,
+            self.center_y + inner_ring_radius
+        ], fill=None, outline=self.border_color, width=2)
 
-    def generate_plate(self):
-        """Main method to generate the Ishihara plate"""
-        # Run physics simulation (previous code remains the same)
-        circles = self.run_physics_simulation()
-
-        # Create images and drawing objects
-        img, mask, mask_draw, circles_img, circles_draw = self.create_initial_images()
-
-        # Draw the decorative elements
-        self.draw_decorative_rings(circles_draw)
-
-        # Draw the mask for the main circle
+    def create_circle_mask(self, mask_draw):
+        """Create mask for the main circle"""
         mask_draw.ellipse([
             self.center_x - self.main_circle_radius,
             self.center_y - self.main_circle_radius,
@@ -247,16 +254,50 @@ class IshiharaPlateGenerator:
             self.center_y + self.main_circle_radius
         ], fill=255)
 
-        # Organize and draw circles
+
+    def draw_bold_border(self, draw):
+        """Draw the bold black border on top of everything"""
+        for i in range(8):
+            draw.ellipse([
+                self.center_x - self.main_circle_radius - i,
+                self.center_y - self.main_circle_radius - i,
+                self.center_x + self.main_circle_radius + i,
+                self.center_y + self.main_circle_radius + i
+            ], fill=None, outline='black', width=3)
+
+    def get_inside_circles(self, circles):
+        """Get only the circles that are inside the main circle"""
+        return [(c, r) for c, r in circles 
+                if self.is_inside_main_circle(c.body.position.x, c.body.position.y)]
+
+    def generate_plate(self):
+        """Main method to generate the Ishihara plate"""
+        # Run physics simulation
+        circles = self.run_physics_simulation()
+        
+        # Create images and drawing objects
+        img, mask, mask_draw, circles_img, circles_draw = self.create_initial_images()
+        
+        # Draw base elements
+        self.draw_base_circle(circles_draw)
+        
+        # Create mask
+        self.create_circle_mask(mask_draw)
+        
+        # Draw all circles
         circle_regions = self.organize_circles_by_position(circles)
         self.draw_circles(circles_draw, circle_regions)
-
-        # Apply mask and combine layers
+        
+        # Combine layers
         img.paste(circles_img, (0, 0), mask)
-
-        inside_circles = [(c, r) for c, r in circles
-                        if self.is_inside_main_circle(c.body.position.x, c.body.position.y)]
+        
+        # Draw border on top
+        self.draw_bold_border(ImageDraw.Draw(img))
+        
+        # Return final image and circles
+        inside_circles = self.get_inside_circles(circles)
         return img, inside_circles
+
 
     def run_physics_simulation(self):
         """Run the physics simulation to place circles"""
