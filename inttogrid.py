@@ -6,7 +6,7 @@
 
 import os
 import zipfile
-from pathlib import Path
+import numpy as np
 
 from PIL import Image, ImageDraw, ImageFont
 from urllib.request import urlretrieve
@@ -101,7 +101,7 @@ def image_to_binary_grid(image):
       row.append(0 if pixel_value == 255 else 1)
     binary_grid.append(row)
     
-  return binary_grid
+  return np.array(binary_grid)
 
 
 
