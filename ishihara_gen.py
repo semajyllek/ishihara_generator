@@ -305,12 +305,13 @@ class IshiharaPlateGenerator:
         return f'#{r:02x}{g:02x}{b:02x}'
 
 
-def generate_ishihara_background():
-    generator = IshiharaPlateGenerator()
-    image, circles = generator.generate_plate()
-    return image, circles
 
-# Usage example:
+
+
+
+
+
+# api
 def generate_ishihara_plate(n: int = 5):
     palette_manager = PaletteManager('palettes.yaml')
     generator = IshiharaPlateGenerator(palette_manager)

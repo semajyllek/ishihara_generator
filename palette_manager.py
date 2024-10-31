@@ -5,14 +5,10 @@ import random
 import yaml
 
 
-import os
 
-# Get the directory containing the current script
-current_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Use os.path.join to create the full path to palettes.yaml
-PALETTE_PATH = os.path.join(current_dir, 'palettes.yaml')
-
+PALETTE_PATH = Path(__file__) /  'palettes.yaml'
 
 
 @dataclass
