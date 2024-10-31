@@ -394,7 +394,7 @@ class IshiharaPlateGenerator:
         self.draw_circles(circles_draw, circle_regions)
         
         # Add texture before final composition
-        #self.add_subtle_texture(circles_img)
+        self.add_subtle_texture(circles_img)
         
         # Combine all images
         img.paste(circles_img, (0, 0), mask)
