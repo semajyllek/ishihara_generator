@@ -53,7 +53,7 @@ def get_damion_tff(zip_url, extract_to="/usr/share/fonts/truetype/"):
         return None
 
 
-def number_to_image(number, font_path, font_size=FONT_SIZE, image_size=(SIZE, SIZE)):
+def number_to_image(number, font_path, font_size, image_size=(SIZE, SIZE)):
     """
     Converts a number to an image using the specified font.
     """
@@ -107,11 +107,11 @@ def image_to_binary_grid(image):
 
 
 
-def generate_binary_image_with_font(num, font_path, size=SIZE):
+def generate_binary_image_with_font(num, font_path, font_size=FONT_SIZE, size=SIZE):
     """
     Generates image for given number using the preset font path.
     """
-    img = number_to_image(num, font_path, image_size=(size, size))
+    img = number_to_image(num, font_path, font_size, image_size=(size, size))
     img_grid = image_to_binary_grid(img)
-    return img_grid
+    return img_grid, img
            
