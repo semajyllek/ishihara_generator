@@ -96,8 +96,8 @@ class IshiharaPlateGenerator:
         Enhanced number boundary checking with edge detection.
         """
         # Make mask slightly smaller for tighter fit
-        number_width = self.main_circle_radius * 1.5  
-        number_height = self.main_circle_radius * 1.5
+        number_width = self.main_circle_radius * 1.7  
+        number_height = self.main_circle_radius * 1.7
         
         # Center the number with slight upward shift
         number_x = self.center_x - number_width/2
