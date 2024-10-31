@@ -357,17 +357,8 @@ class IshiharaPlateGenerator:
 
         
     def draw_circle_with_gradient(self, draw, pos, radius, color):
-        """Draw a single circle with a subtle white ring around the edge"""
+        """Draw a single circle with white ring that shows even with overlap"""
         try:
-            # Draw white ring first (slightly larger than the main circle)
-            ring_thickness = max(1, radius * 0.08)  # 8% of radius for ring, minimum 1 pixel
-            draw.ellipse([
-                pos.x - radius - ring_thickness,
-                pos.y - radius - ring_thickness,
-                pos.x + radius + ring_thickness,
-                pos.y + radius + ring_thickness
-            ], fill='white')
-            
             # Main circle
             draw.ellipse([
                 pos.x - radius,
@@ -375,6 +366,15 @@ class IshiharaPlateGenerator:
                 pos.x + radius,
                 pos.y + radius
             ], fill=color)
+            
+            # Draw white ring outline on top
+            ring_thickness = max(1, radius * 0.08)  # 8% of radius, minimum 1 pixel
+            draw.ellipse([
+                pos.x - radius - ring_thickness,
+                pos.y - radius - ring_thickness,
+                pos.x + radius + ring_thickness,
+                pos.y + radius + ring_thickness
+            ], fill=None, outline='white', width=max(1, int(ring_thickness)))
             
         except Exception as e:
             # Fallback to simple circle if drawing fails
