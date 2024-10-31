@@ -17,7 +17,7 @@ from PIL import ImageColor
 from typing import Optional
 import random
 
-from .palette_manager import PaletteManager
+from .color_generator import generate_ishihara_palette
 from .inttogrid import DigitRenderer
 
 # Fixed constants for circle sizes
@@ -30,7 +30,7 @@ DEMO_NUMBER = 5
 
 
 class IshiharaPlateGenerator:
-    def __init__(self, palette_manager: Optional[PaletteManager] = None, num: int = DEMO_NUMBER):
+    def __init__(self, num: int = DEMO_NUMBER):
 
         # creates binary grids with stylistic integer mask
         self.renderer = DigitRenderer(font_size=FONT_SIZE, debug=True)
@@ -60,9 +60,8 @@ class IshiharaPlateGenerator:
         self.space.iterations = 30
 
       
-        # color palette  
-        self.palette_manager = palette_manager or PaletteManager()
-        selected_palette = self.palette_manager.get_random_palette()
+        # color palette 
+        selected_palette = generate_ishihara_palette()
         
         self.background_colors = selected_palette['colors']['background']
         self.figure_colors = selected_palette['colors']['figure']
