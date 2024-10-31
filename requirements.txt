@@ -2,4 +2,3 @@ pymunk
 pillow
 pygame
 numpy
-colorharmonies
