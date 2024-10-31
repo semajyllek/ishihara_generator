@@ -14,14 +14,11 @@ import pymunk.pygame_util
 from PIL import Image, ImageDraw
 from PIL import ImageColor
 
-
-import yaml
 from typing import Optional
 import random
 
 from .palette_manager import PaletteManager
 from .inttogrid import DigitRenderer
-from .number_grids import NUMBER_FIVE
 
 # Fixed constants for circle sizes
 LARGE_CIRCLE_DIAMETER = 800  # pixels

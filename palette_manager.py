@@ -1,5 +1,5 @@
 # palette_manager.py
-from color_generator import generate_ishihara_palette
+from .color_generator import generate_ishihara_palette
 
 class PaletteManager:
     def __init__(self):
