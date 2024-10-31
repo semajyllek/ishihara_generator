@@ -1,12 +1,23 @@
 # color_generator.py
 from colorharmonies import Color
 import numpy as np
+import colorsys
 
 class ColorPaletteGenerator:
+    def create_color(self, h, s, l):
+        """Create a Color object with all required color spaces"""
+        # Convert HLS to RGB
+        rgb = colorsys.hls_to_rgb(h, l, s)
+        # Convert RGB to HSV
+        hsv = colorsys.rgb_to_hsv(*rgb)
+        # Create color with all required spaces
+        return Color(RGB=rgb, HLS=(h, l, s), HSV=hsv)
+
     def generate_background_palette(self, base_hue, num_colors=10):
         colors = []
         # Create base color with high saturation and medium lightness
-        base_color = Color(HLS=(base_hue/360, 0.7, 0.65))  # Note: hue needs to be 0-1
+        base_hue_normalized = (base_hue % 360) / 360  # Convert 0-360 to 0-1
+        base_color = self.create_color(base_hue_normalized, 0.7, 0.65)
         colors.append(base_color)
         
         # Generate variations spreading around the base hue
@@ -14,36 +25,31 @@ class ColorPaletteGenerator:
         step = spread / (num_colors - 1) if num_colors > 1 else 0
         
         for i in range(num_colors - 1):
-            # Alternate between plus and minus from base hue
             if i % 2 == 0:
-                hue_variation = ((base_hue + step * (i//2)) % 360) / 360  # Convert to 0-1
+                hue_variation = ((base_hue + step * (i//2)) % 360) / 360
             else:
-                hue_variation = ((base_hue - step * (i//2)) % 360) / 360  # Convert to 0-1
+                hue_variation = ((base_hue - step * (i//2)) % 360) / 360
                 
-            # Vary saturation and lightness slightly
             saturation = 0.7 + np.random.uniform(-0.1, 0.1)
             lightness = 0.65 + np.random.uniform(-0.1, 0.1)
             
-            # Keep values in valid ranges
             saturation = np.clip(saturation, 0.5, 0.9)
             lightness = np.clip(lightness, 0.5, 0.8)
             
-            new_color = Color(HLS=(hue_variation, saturation, lightness))
+            new_color = self.create_color(hue_variation, saturation, lightness)
             colors.append(new_color)
             
         return [self.rgb_to_hex(color.rgb) for color in colors]
 
     def generate_figure_palette(self, background_hue, num_colors=10):
         colors = []
-        # Use complementary color for maximum contrast
         figure_hue = (background_hue + 180) % 360
         
-        # Create base complementary color
-        base_color = Color(HLS=(figure_hue/360, 0.8, 0.45))
+        figure_hue_normalized = figure_hue / 360
+        base_color = self.create_color(figure_hue_normalized, 0.8, 0.45)
         colors.append(base_color)
         
-        # Generate variations
-        spread = 30  # degrees
+        spread = 30
         step = spread / (num_colors - 1) if num_colors > 1 else 0
         
         for i in range(num_colors - 1):
@@ -55,11 +61,10 @@ class ColorPaletteGenerator:
             saturation = 0.8 + np.random.uniform(-0.1, 0.1)
             lightness = 0.45 + np.random.uniform(-0.1, 0.1)
             
-            # Keep values in valid ranges
             saturation = np.clip(saturation, 0.6, 0.9)
             lightness = np.clip(lightness, 0.3, 0.6)
             
-            new_color = Color(HLS=(hue_variation, saturation, lightness))
+            new_color = self.create_color(hue_variation, saturation, lightness)
             colors.append(new_color)
             
         return [self.rgb_to_hex(color.rgb) for color in colors]
