@@ -6,7 +6,7 @@ class ColorPaletteGenerator:
     def generate_background_palette(self, base_hue, num_colors=10):
         colors = []
         # Create base color with high saturation and medium lightness
-        base_color = Color(hsl=(base_hue/360, 0.7, 0.65))  # Note: hue needs to be 0-1
+        base_color = Color(HLS=(base_hue/360, 0.7, 0.65))  # Note: hue needs to be 0-1
         colors.append(base_color)
         
         # Generate variations spreading around the base hue
@@ -28,7 +28,7 @@ class ColorPaletteGenerator:
             saturation = np.clip(saturation, 0.5, 0.9)
             lightness = np.clip(lightness, 0.5, 0.8)
             
-            new_color = Color(hsl=(hue_variation, saturation, lightness))
+            new_color = Color(HLS=(hue_variation, saturation, lightness))
             colors.append(new_color)
             
         return [self.rgb_to_hex(color.rgb) for color in colors]
@@ -59,7 +59,7 @@ class ColorPaletteGenerator:
             saturation = np.clip(saturation, 0.6, 0.9)
             lightness = np.clip(lightness, 0.3, 0.6)
             
-            new_color = Color(hsl=(hue_variation, saturation, lightness))
+            new_color = Color(HLS=(hue_variation, saturation, lightness))
             colors.append(new_color)
             
         return [self.rgb_to_hex(color.rgb) for color in colors]
