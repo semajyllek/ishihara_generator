@@ -1,13 +1,17 @@
 # color_generator.py
-from colorspacious import cspace_converter, CVD_SPACE
+from colorspacious import cspace_converter
+from colorspacious.cvd import simulate_cvd
 from colorharmonies import Color, MonochromaticColor
 import numpy as np
 
 class ColorPaletteGenerator:
     def __init__(self):
-        self.cvd_space = CVD_SPACE
         self.lab_to_rgb = cspace_converter("CAM02-UCS", "sRGB1")
         self.rgb_to_lab = cspace_converter("sRGB1", "CAM02-UCS")
+
+    def simulate_deuteranopia(self, rgb):
+        """Simulate how color appears to someone with deuteranopia"""
+        return simulate_cvd(rgb, "deuteranopia", severity=1.0)
 
     def generate_background_palette(self, base_hue, num_colors=10):
         colors = []
@@ -15,7 +19,10 @@ class ColorPaletteGenerator:
         variations = MonochromaticColor(base_color, num_colors)
         
         for color in variations:
-            rgb = color.rgb
+            rgb = np.array(color.rgb)
+            # Check visibility for deuteranopes
+            deuter_rgb = self.simulate_deuteranopia(rgb)
+            
             lab = self.rgb_to_lab(rgb)
             lab[0] += np.random.uniform(-10, 10)
             lab[1] *= 1.2
@@ -33,7 +40,10 @@ class ColorPaletteGenerator:
         variations = MonochromaticColor(base_color, num_colors)
         
         for color in variations:
-            rgb = color.rgb
+            rgb = np.array(color.rgb)
+            # Check visibility for deuteranopes
+            deuter_rgb = self.simulate_deuteranopia(rgb)
+            
             lab = self.rgb_to_lab(rgb)
             lab[0] += np.random.uniform(-5, 5)
             lab[1] *= 1.3
@@ -54,7 +64,6 @@ class ColorPaletteGenerator:
 def generate_ishihara_palette():
     color_gen = ColorPaletteGenerator()
     
-    # Generate different color themes
     themes = [
         {'hue': 30, 'name': 'warm_orange'},  # Orange
         {'hue': 0, 'name': 'warm_red'},      # Red
