@@ -364,35 +364,6 @@ class IshiharaPlateGenerator:
                     max(0, min(255, b + noise))
                 )
 
-    def add_subtle_texture2(self, img):
-        """
-        Add enhanced natural texture to the image.
-        """
-        width, height = img.size
-        pixels = img.load()
-        
-        # Create more natural noise pattern
-        for x in range(width):
-            for y in range(height):
-                if isinstance(pixels[x, y], int):
-                    continue
-                    
-                r, g, b = pixels[x, y][:3]
-                
-                # Variable noise based on position
-                noise_factor = math.sin(x/width * math.pi) * math.cos(y/height * math.pi)
-                noise = random.randint(-7, 7)
-                texture_noise = int(noise * noise_factor)
-                
-                # Add slight color variation
-                color_shift = random.randint(-3, 3)
-                
-                pixels[x, y] = (
-                    max(0, min(255, r + texture_noise + color_shift)),
-                    max(0, min(255, g + texture_noise)),
-                    max(0, min(255, b + texture_noise - color_shift))
-                )
-
 
 
     def draw_circles(self, circles_draw, circle_regions):
@@ -501,7 +472,7 @@ class IshiharaPlateGenerator:
         self.draw_circles(circles_draw, circle_regions)
         
         # Add texture before final composition
-        self.add_subtle_texture2(circles_img)
+        self.add_subtle_texture(circles_img)
         
         # Combine all images
         img.paste(circles_img, (0, 0), mask)
