@@ -14,12 +14,10 @@ from urllib.request import urlretrieve
 FONT_SIZE = 50
 SIZE = 50
 
+DAMION_YRL = 'https://www.1001fonts.com/download/damion.zip'
 
-# prompt: create a function, get_damion_tff  which will download and unzip the given tff zip location on the internet
-# !wget https://www.1001fonts.com/download/damion.zip
-# !unzip damion.zip  # assume Damion-Regular.tff is in the path
 
-def get_damion_tff(zip_url, extract_to="/usr/share/fonts/truetype/"):
+def get_damion_tff(zip_url=DAMION_YRL, extract_to="/usr/share/fonts/truetype/"):
     """
     Downloads and extracts a TTF font file from a given zip URL.
 
