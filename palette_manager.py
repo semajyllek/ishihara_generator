@@ -8,7 +8,7 @@ import yaml
 
 
 # Use os.path.join to create the full path to palettes.yaml
-PALETTE_PATH = Path(__file__) /  'palettes.yaml'
+PALETTE_PATH = Path(__file__).parent /  'palettes.yaml'
 
 
 @dataclass
