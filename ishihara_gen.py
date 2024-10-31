@@ -494,19 +494,6 @@ class IshiharaPlateGenerator:
             self.center_y + inner_ring_radius
         ], fill=None, outline=self.border_color, width=2)
 
-    def organize_circles_by_position(self, circles):
-        """Group and sort circles by their position for better color distribution"""
-        circle_regions = []
-        for circle, radius in circles:
-            pos = circle.body.position
-            angle = math.atan2(pos.y - self.center_y, pos.x - self.center_x)
-            dist = math.sqrt((pos.x - self.center_x)**2 + (pos.y - self.center_y)**2)
-            circle_regions.append((circle, radius, angle, dist))
-
-        # Sort by angle and distance for more pleasing distribution
-        circle_regions.sort(key=lambda x: (x[2], x[3]))
-        return circle_regions
-
 
     def add_subtle_texture(self, img):
         """Add subtle noise texture to the image"""
@@ -526,29 +513,147 @@ class IshiharaPlateGenerator:
                 )
 
 
+    def organize_circles_by_position(self, circles):
+        """Group circles by their position with enhanced color distribution"""
+        circle_regions = []
+        
+        # Calculate normalized distances and angles for all circles
+        for circle, radius in circles:
+            pos = circle.body.position
+            # Calculate angle and distance from center
+            angle = math.atan2(pos.y - self.center_y, pos.x - self.center_x)
+            dist = math.sqrt((pos.x - self.center_x)**2 + (pos.y - self.center_y)**2)
+            # Normalize distance
+            norm_dist = dist / self.main_circle_radius
+            
+            # Add region classification (inner, middle, outer)
+            region = 'inner' if norm_dist < 0.33 else 'middle' if norm_dist < 0.66 else 'outer'
+            
+            # Add quadrant information (0-3)
+            quadrant = int((angle + math.pi) / (math.pi / 2))
+            
+            circle_regions.append({
+                'circle': circle,
+                'radius': radius,
+                'angle': angle,
+                'distance': dist,
+                'region': region,
+                'quadrant': quadrant,
+                'is_number': self.is_inside_number(pos.x, pos.y)
+            })
+            
+        return circle_regions
 
     def draw_circles(self, circles_draw, circle_regions):
-        """Draw circles with simpler but more diverse color distribution"""
-        # Reset color indices at start
+        """Draw circles with enhanced color distribution"""
+        # Reset color indices
         self.current_bg_color_index = 0
         self.current_fg_color_index = 0
         
-        # Shuffle the circle order before drawing to break up patterns
-        random.shuffle(circle_regions)
+        # Group circles by region and quadrant
+        region_groups = {'inner': [], 'middle': [], 'outer': []}
+        for circle_data in circle_regions:
+            if self.is_inside_main_circle(circle_data['circle'].body.position.x, 
+                                        circle_data['circle'].body.position.y):
+                region_groups[circle_data['region']].append(circle_data)
         
-        for circle, radius in circle_regions:
-            pos = circle.body.position
-            if self.is_inside_main_circle(pos.x, pos.y):
-                if self.is_inside_number(pos.x, pos.y):
-                    # Cycle through figure colors more frequently
-                    color = self.figure_colors[self.current_fg_color_index]
-                    self.current_fg_color_index = (self.current_fg_color_index + 2) % len(self.figure_colors)
+        # Draw circles by region to ensure color variation
+        for region, circles in region_groups.items():
+            # Sort circles in region by quadrant and angle
+            circles.sort(key=lambda x: (x['quadrant'], x['angle']))
+            
+            # Track last used colors to avoid repetition
+            last_bg_color = None
+            last_fg_color = None
+            
+            for circle_data in circles:
+                pos = circle_data['circle'].body.position
+                radius = circle_data['radius']
+                
+                if circle_data['is_number']:
+                    # Get figure color ensuring it's different from last used
+                    color = self.get_next_figure_color(last_fg_color)
+                    last_fg_color = color
                 else:
-                    # Cycle through background colors more frequently
-                    color = self.background_colors[self.current_bg_color_index]
-                    self.current_bg_color_index = (self.current_bg_color_index + 2) % len(self.background_colors)
+                    # Get background color ensuring it's different from last used
+                    color = self.get_next_background_color(last_bg_color)
+                    last_bg_color = color
+                
+                # Apply subtle variations based on position
+                color = self.adjust_color(color, circle_data['angle'], circle_data['distance'])
                 
                 self.draw_circle_with_gradient(circles_draw, pos, radius, color)
+
+    def get_next_background_color(self, last_color=None):
+        """Get next background color ensuring variety"""
+        if last_color is not None:
+            # Try to pick a color different enough from the last one
+            attempts = 0
+            while attempts < len(self.background_colors):
+                color = self.background_colors[self.current_bg_color_index]
+                if self.color_difference(color, last_color) > 30:  # threshold for difference
+                    break
+                self.current_bg_color_index = (self.current_bg_color_index + 1) % len(self.background_colors)
+                attempts += 1
+        else:
+            color = self.background_colors[self.current_bg_color_index]
+        
+        self.current_bg_color_index = (self.current_bg_color_index + 1) % len(self.background_colors)
+        return color
+
+    def get_next_figure_color(self, last_color=None):
+        """Get next figure color ensuring variety"""
+        if last_color is not None:
+            # Try to pick a color different enough from the last one
+            attempts = 0
+            while attempts < len(self.figure_colors):
+                color = self.figure_colors[self.current_fg_color_index]
+                if self.color_difference(color, last_color) > 30:  # threshold for difference
+                    break
+                self.current_fg_color_index = (self.current_fg_color_index + 1) % len(self.figure_colors)
+                attempts += 1
+        else:
+            color = self.figure_colors[self.current_fg_color_index]
+        
+        self.current_fg_color_index = (self.current_fg_color_index + 1) % len(self.figure_colors)
+        return color
+
+    def color_difference(self, color1, color2):
+        """Calculate approximate color difference in RGB space"""
+        # Convert hex to RGB
+        r1 = int(color1[1:3], 16)
+        g1 = int(color1[3:5], 16)
+        b1 = int(color1[5:7], 16)
+        
+        r2 = int(color2[1:3], 16)
+        g2 = int(color2[3:5], 16)
+        b2 = int(color2[5:7], 16)
+        
+        # Calculate Euclidean distance in RGB space
+        return math.sqrt((r1 - r2)**2 + (g1 - g2)**2 + (b1 - b2)**2)
+
+    def adjust_color(self, color, angle, dist):
+        """Create subtle variations in color based on position"""
+        # Convert hex to RGB
+        r = int(color[1:3], 16)
+        g = int(color[3:5], 16)
+        b = int(color[5:7], 16)
+        
+        # Add position-based variations
+        variation = 15  # Increased from 10 for more noticeable variation
+        normalized_dist = dist / self.main_circle_radius
+        
+        # Use trigonometric functions for smooth variations
+        r = max(0, min(255, r + int(math.cos(angle) * variation)))
+        g = max(0, min(255, g + int(math.sin(angle * 2) * variation)))
+        b = max(0, min(255, b + int(math.cos(normalized_dist * math.pi) * variation)))
+        
+        # Add slight random variation
+        r = max(0, min(255, r + random.randint(-5, 5)))
+        g = max(0, min(255, g + random.randint(-5, 5)))
+        b = max(0, min(255, b + random.randint(-5, 5)))
+        
+        return f'#{r:02x}{g:02x}{b:02x}'
 
 
     def draw_base_circle(self, draw):
