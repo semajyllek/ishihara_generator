@@ -17,7 +17,7 @@ from typing import Optional
 import random
 
 from .color_generator import generate_ishihara_palette
-from .inttogrid import DigitRenderer, get_tff
+from .int_to_grid import DigitRenderer, get_tff
 
 # Fixed constants for circle sizes
 LARGE_CIRCLE_DIAMETER = 800  # pixels
@@ -355,15 +355,18 @@ class IshiharaPlateGenerator:
         circle_regions.sort(key=lambda x: (x[2], x[3]))
         return circle_regions
 
-    
+        
     def draw_circle_with_gradient(self, draw, pos, radius, color):
-        """Draw a single circle with subtle gradient effect"""
+        """Draw a single circle with a subtle white ring around the edge"""
         try:
-            rgb = ImageColor.getrgb(color)
-            
-            # Create darker and lighter versions
-            darker = tuple(int(c * 0.95) for c in rgb)
-            lighter = tuple(int(min(255, c * 1.05)) for c in rgb)
+            # Draw white ring first (slightly larger than the main circle)
+            ring_thickness = max(1, radius * 0.08)  # 8% of radius for ring, minimum 1 pixel
+            draw.ellipse([
+                pos.x - radius - ring_thickness,
+                pos.y - radius - ring_thickness,
+                pos.x + radius + ring_thickness,
+                pos.y + radius + ring_thickness
+            ], fill='white')
             
             # Main circle
             draw.ellipse([
@@ -373,17 +376,8 @@ class IshiharaPlateGenerator:
                 pos.y + radius
             ], fill=color)
             
-            # Highlight
-            highlight_radius = radius * 0.7
-            draw.ellipse([
-                pos.x - highlight_radius,
-                pos.y - highlight_radius,
-                pos.x + highlight_radius * 0.8,
-                pos.y + highlight_radius * 0.8
-            ], fill=lighter)
-            
         except Exception as e:
-            # Fallback to simple circle if gradient fails
+            # Fallback to simple circle if drawing fails
             draw.ellipse([
                 pos.x - radius,
                 pos.y - radius,
