@@ -336,100 +336,9 @@ class IshiharaPlateGenerator:
         return None
     
 
-    def pack_region(self, number_circles=None, is_number_region=True):
-        """Enhanced region packing with proper termination"""
-        circles = []
-        attempted_positions = set()
-        spacing = 0.5
-        
-        # Set parameters based on region
-        if is_number_region:
-            target_circles = 120
-            min_circles = 80  # Minimum acceptable circles for number region
-            region_checker = self.is_inside_number
-        else:
-            target_circles = 600
-            min_circles = 400  # Minimum acceptable circles for background
-            region_checker = lambda x, y: (
-                self.is_inside_main_circle(x, y) and 
-                not self.is_inside_number(x, y)
-            )
-        
-        # Initialize positions using grid
-        grid_size = 6
-        positions = []
-        
-        # Generate initial grid with slight offset for each row
-        x_start = self.center_x - self.main_circle_radius
-        x_end = self.center_x + self.main_circle_radius
-        y_start = self.center_y - self.main_circle_radius
-        y_end = self.center_y + self.main_circle_radius
-        
-        row_count = 0
-        for y in np.arange(y_start, y_end, grid_size):
-            offset = (row_count % 2) * (grid_size / 2)  # Offset alternate rows
-            for x in np.arange(x_start + offset, x_end, grid_size):
-                if region_checker(x, y):
-                    positions.append((x, y))
-            row_count += 1
-        
-        random.shuffle(positions)
-        
-        # Track failed attempts per radius
-        radius_attempts = {r: 0 for r in self.get_circle_sizes()}
-        max_radius_attempts = 50  # Maximum attempts per radius
-        
-        # Main packing loop
-        while positions and len(circles) < target_circles:
-            # Get current position
-            x, y = positions.pop(0)
-            pos_key = (round(x/grid_size*2), round(y/grid_size*2))
-            
-            if pos_key in attempted_positions:
-                continue
-            
-            attempted_positions.add(pos_key)
-            
-            # Try each radius
-            placed = False
-            for radius in self.get_circle_sizes():
-                if radius_attempts[radius] >= max_radius_attempts:
-                    continue
-                    
-                if self.check_position(x, y, radius, circles, number_circles, is_number_region, spacing):
-                    circles.append(((x, y), radius))
-                    placed = True
-                    
-                    # Add new positions around successful placement
-                    for angle in range(0, 360, 30):
-                        rad = math.radians(angle)
-                        new_x = x + math.cos(rad) * (radius * 2 + spacing)
-                        new_y = y + math.sin(rad) * (radius * 2 + spacing)
-                        if region_checker(new_x, new_y):
-                            positions.append((new_x, new_y))
-                    break
-                else:
-                    radius_attempts[radius] += 1
-            
-            # If position was successful, reset radius attempts
-            if placed:
-                radius_attempts = {r: 0 for r in self.get_circle_sizes()}
-            
-            # Periodically shuffle remaining positions
-            if len(circles) % 10 == 0:
-                random.shuffle(positions)
-            
-            # Check if we've hit minimum circle count and positions are getting scarce
-            if len(circles) >= min_circles and len(positions) < 50:
-                break
-            
-            # Break if all radii have been maxed out
-            if all(attempts >= max_radius_attempts for attempts in radius_attempts.values()):
-                break
-        
-        return circles
 
-    def get_circle_sizes(self):
+
+
         """Circle sizes for efficient packing"""
         sizes = [48, 40, 32, 28, 24, 20, 16]  # pixels diameter
         return [s//2 for s in sizes]  # Convert to radii
@@ -464,6 +373,140 @@ class IshiharaPlateGenerator:
         
         return True
 
+    
+    def get_circle_sizes(self):
+        """Extended range of circle sizes with more small options"""
+        # Added more small sizes for better gap filling
+        sizes = [48, 40, 32, 28, 24, 20, 16, 12, 10]  # pixels diameter
+        return [s//2 for s in sizes]  # Convert to radii
+
+    def find_gaps(self, current_circles, region_checker, min_size=5):
+        """Find gaps that could fit at least a small circle"""
+        gaps = []
+        grid_size = min_size
+        
+        # Create a fine grid for gap checking
+        for y in np.arange(self.center_y - self.main_circle_radius, 
+                        self.center_y + self.main_circle_radius, 
+                        grid_size):
+            for x in np.arange(self.center_x - self.main_circle_radius,
+                            self.center_x + self.main_circle_radius,
+                            grid_size):
+                if not region_checker(x, y):
+                    continue
+                    
+                # Find largest circle that would fit here
+                max_radius = 0
+                for test_radius in reversed(self.get_circle_sizes()):
+                    if self.check_position(x, y, test_radius, current_circles):
+                        max_radius = test_radius
+                        break
+                
+                if max_radius >= min_size:
+                    gaps.append((x, y, max_radius))
+        
+        return gaps
+
+    def pack_region(self, number_circles=None, is_number_region=True):
+        """Enhanced region packing with aggressive gap filling"""
+        circles = []
+        attempted_positions = set()
+        spacing = 0.5
+        
+        # Set parameters based on region
+        if is_number_region:
+            target_circles = 150  # Increased for more density
+            min_circles = 100
+            region_checker = self.is_inside_number
+        else:
+            target_circles = 800  # Increased for more density
+            min_circles = 500
+            region_checker = lambda x, y: (
+                self.is_inside_main_circle(x, y) and 
+                not self.is_inside_number(x, y)
+            )
+        
+        # Initial grid-based packing
+        grid_size = 6
+        positions = []
+        row_count = 0
+        
+        for y in np.arange(self.center_y - self.main_circle_radius, 
+                        self.center_y + self.main_circle_radius, 
+                        grid_size):
+            offset = (row_count % 2) * (grid_size / 2)
+            for x in np.arange(self.center_x - self.main_circle_radius + offset,
+                            self.center_x + self.main_circle_radius,
+                            grid_size):
+                if region_checker(x, y):
+                    positions.append((x, y))
+            row_count += 1
+        
+        random.shuffle(positions)
+        
+        # Initial packing phase
+        radius_attempts = {r: 0 for r in self.get_circle_sizes()}
+        max_radius_attempts = 50
+        
+        while positions and len(circles) < target_circles:
+            x, y = positions.pop(0)
+            pos_key = (round(x/grid_size*2), round(y/grid_size*2))
+            
+            if pos_key in attempted_positions:
+                continue
+                
+            attempted_positions.add(pos_key)
+            
+            # Try each radius
+            placed = False
+            for radius in self.get_circle_sizes()[:-2]:  # Reserve smallest sizes for gap filling
+                if radius_attempts[radius] >= max_radius_attempts:
+                    continue
+                    
+                if self.check_position(x, y, radius, circles, number_circles, is_number_region, spacing):
+                    circles.append(((x, y), radius))
+                    placed = True
+                    
+                    # Add new positions around successful placement
+                    for angle in range(0, 360, 30):
+                        rad = math.radians(angle)
+                        new_x = x + math.cos(rad) * (radius * 2 + spacing)
+                        new_y = y + math.sin(rad) * (radius * 2 + spacing)
+                        if region_checker(new_x, new_y):
+                            positions.append((new_x, new_y))
+                    break
+                else:
+                    radius_attempts[radius] += 1
+            
+            if placed:
+                radius_attempts = {r: 0 for r in self.get_circle_sizes()}
+                
+            if len(circles) % 10 == 0:
+                random.shuffle(positions)
+        
+        # Gap filling phase
+        smallest_sizes = self.get_circle_sizes()[-2:]  # Use only smallest circles for gaps
+        gaps = self.find_gaps(circles, region_checker, min_size=5)
+        
+        for x, y, max_radius in gaps:
+            # Try to fit smallest circles in gaps
+            for radius in smallest_sizes:
+                if radius <= max_radius and self.check_position(x, y, radius, circles, number_circles, is_number_region, spacing):
+                    circles.append(((x, y), radius))
+                    break
+        
+        # Final gap sweep with minimum size
+        if len(circles) >= min_circles:
+            min_size = smallest_sizes[-1]
+            extra_gaps = self.find_gaps(circles, region_checker, min_size=min_size)
+            
+            for x, y, _ in extra_gaps:
+                if self.check_position(x, y, min_size, circles, number_circles, is_number_region, spacing):
+                    circles.append(((x, y), min_size))
+        
+        return circles
+    
+    
     def pack_circles(self):
         """Main packing routine with termination guarantees"""
         # Pack number region
@@ -778,6 +821,10 @@ class IshiharaPlateGenerator:
                 
         return True
 
+    
+    
+    
+    
     def run_physics_simulation(self):
         """Replace physics simulation with fixed packing"""
         return self.pack_circles()
