@@ -7,11 +7,11 @@ class ColorPaletteGenerator:
     def create_color(self, h, s, l):
         """Create a Color object with all required color spaces"""
         # Convert HLS to RGB
-        rgb = colorsys.hls_to_rgb(h, l, s)
+        RGB = colorsys.hls_to_rgb(h, l, s)
         # Convert RGB to HSV
-        hsv = colorsys.rgb_to_hsv(*rgb)
+        HSV = colorsys.rgb_to_hsv(*RGB)
         # Create color with all required spaces
-        return Color(RGB=rgb, HLS=(h, l, s), HSV=hsv)
+        return Color(RGB=RGB, HLS=(h, l, s), HSV=HSV)
 
     def generate_background_palette(self, base_hue, num_colors=10):
         colors = []
@@ -39,7 +39,7 @@ class ColorPaletteGenerator:
             new_color = self.create_color(hue_variation, saturation, lightness)
             colors.append(new_color)
             
-        return [self.rgb_to_hex(color.rgb) for color in colors]
+        return [self.rgb_to_hex(color.RGB) for color in colors]
 
     def generate_figure_palette(self, background_hue, num_colors=10):
         colors = []
@@ -67,14 +67,14 @@ class ColorPaletteGenerator:
             new_color = self.create_color(hue_variation, saturation, lightness)
             colors.append(new_color)
             
-        return [self.rgb_to_hex(color.rgb) for color in colors]
+        return [self.rgb_to_hex(color.RGB) for color in colors]
 
     @staticmethod
-    def rgb_to_hex(rgb):
+    def rgb_to_hex(RGB):
         return '#{:02x}{:02x}{:02x}'.format(
-            int(rgb[0] * 255),
-            int(rgb[1] * 255),
-            int(rgb[2] * 255)
+            int(RGB[0] * 255),
+            int(RGB[1] * 255),
+            int(RGB[2] * 255)
         )
 
 def generate_ishihara_palette():
