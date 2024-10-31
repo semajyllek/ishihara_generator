@@ -4,82 +4,139 @@ import numpy as np
 import colorsys
 
 class ColorPaletteGenerator:
-    def generate_background_palette(self, base_hue, num_colors=15):
+    def create_color(self, h, s, l):
+        """Create a Color object with all required color spaces"""
+        RGB = colorsys.hls_to_rgb(h, l, s)
+        HSV = colorsys.rgb_to_hsv(*RGB)
+        return Color(RGB=RGB, HLS=(h, l, s), HSV=HSV)
+
+    def generate_background_palette(self, base_hue, condition, num_colors=15):
         colors = []
-        base_hues = [
-            (base_hue % 360) / 360,
-            ((base_hue + 10) % 360) / 360,
-            ((base_hue - 10) % 360) / 360,
-        ]
-        
-        # More varied saturations and lightnesses
-        for base_h in base_hues:
-            # Vivid variants
-            colors.append(self.create_color(base_h, 0.90, 0.65))
-            colors.append(self.create_color(base_h, 0.85, 0.70))
-            # Rich variants
-            colors.append(self.create_color(base_h, 0.80, 0.55))
-            colors.append(self.create_color(base_h, 0.75, 0.60))
-            # Deep variants
-            colors.append(self.create_color(base_h, 0.70, 0.45))
-            
+        # Adjust parameters based on type of color blindness test
+        if condition == 'deuteranopia':
+            # Salmon-orange range optimized for deuteranopia testing
+            saturations = np.linspace(0.75, 0.85, 5)
+            lightnesses = np.linspace(0.60, 0.75, 3)
+            hue_variation = 10
+        elif condition == 'protanopia':
+            # Red range optimized for protanopia testing
+            saturations = np.linspace(0.70, 0.85, 5)
+            lightnesses = np.linspace(0.55, 0.70, 3)
+            hue_variation = 8
+        else:  # tritanopia
+            # Brown range optimized for tritanopia testing
+            saturations = np.linspace(0.65, 0.80, 5)
+            lightnesses = np.linspace(0.50, 0.65, 3)
+            hue_variation = 12
+
+        # Generate base colors with controlled variations
+        for s in saturations:
+            for l in lightnesses:
+                h = ((base_hue + np.random.uniform(-hue_variation, hue_variation)) % 360) / 360
+                colors.append(self.create_color(h, s, l))
+
+        # Add some subtle variations
         while len(colors) < num_colors:
-            h = ((base_hue + np.random.uniform(-15, 15)) % 360) / 360
-            s = np.random.uniform(0.70, 0.90)
-            l = np.random.uniform(0.45, 0.70)
+            h = ((base_hue + np.random.uniform(-hue_variation, hue_variation)) % 360) / 360
+            s = np.random.choice(saturations) + np.random.uniform(-0.05, 0.05)
+            l = np.random.choice(lightnesses) + np.random.uniform(-0.05, 0.05)
+            s = np.clip(s, 0.6, 0.9)
+            l = np.clip(l, 0.5, 0.8)
             colors.append(self.create_color(h, s, l))
-            
+
+        return [self.rgb_to_hex(color.RGB) for color in colors]
+
+    def generate_figure_palette(self, base_hue, condition, num_colors=15):
+        colors = []
+        # Adjust parameters based on type of color blindness test
+        if condition == 'deuteranopia':
+            # Green range optimized for deuteranopia testing
+            saturations = np.linspace(0.75, 0.90, 5)
+            lightnesses = np.linspace(0.40, 0.55, 3)
+            hue_variation = 8
+        elif condition == 'protanopia':
+            # Blue-green range optimized for protanopia testing
+            saturations = np.linspace(0.70, 0.85, 5)
+            lightnesses = np.linspace(0.45, 0.60, 3)
+            hue_variation = 10
+        else:  # tritanopia
+            # Blue range optimized for tritanopia testing
+            saturations = np.linspace(0.70, 0.85, 5)
+            lightnesses = np.linspace(0.45, 0.60, 3)
+            hue_variation = 12
+
+        # Generate base colors with controlled variations
+        for s in saturations:
+            for l in lightnesses:
+                h = ((base_hue + np.random.uniform(-hue_variation, hue_variation)) % 360) / 360
+                colors.append(self.create_color(h, s, l))
+
+        # Add some subtle variations
+        while len(colors) < num_colors:
+            h = ((base_hue + np.random.uniform(-hue_variation, hue_variation)) % 360) / 360
+            s = np.random.choice(saturations) + np.random.uniform(-0.05, 0.05)
+            l = np.random.choice(lightnesses) + np.random.uniform(-0.05, 0.05)
+            s = np.clip(s, 0.65, 0.95)
+            l = np.clip(l, 0.35, 0.65)
+            colors.append(self.create_color(h, s, l))
+
         return [self.rgb_to_hex(color.RGB) for color in colors]
 
 def generate_ishihara_palette():
     color_gen = ColorPaletteGenerator()
     
-    # Rich, natural themes inspired by your suggestions
+    # Themes specifically calibrated for color blindness testing
     themes = [
         {
-            'hue': 280,  # Deep purple
-            'name': 'blackberry',
+            'hue': 25,  # Salmon-orange
+            'name': 'deuteranopia_test_1',
+            'condition': 'deuteranopia',
+            'figure_hue': 120,  # Green
+            'border': '#E8D0A9',
+            'background_base': '#FFF6E9'
         },
         {
-            'hue': 45,   # Sandy gold
-            'name': 'harvest_sand',
+            'hue': 15,  # Warmer orange
+            'name': 'deuteranopia_test_2',
+            'condition': 'deuteranopia',
+            'figure_hue': 125,  # Slightly different green
+            'border': '#E8D0A9',
+            'background_base': '#FFF6E9'
         },
         {
-            'hue': 25,   # Rich squash
-            'name': 'september_squash',
+            'hue': 30,  # Orange
+            'name': 'protanopia_test',
+            'condition': 'protanopia',
+            'figure_hue': 140,  # Blue-green
+            'border': '#E8D0A9',
+            'background_base': '#FFF6E9'
         },
         {
-            'hue': 210,  # Deep ocean blue
-            'name': 'deep_ocean',
-        },
-        {
-            'hue': 140,  # Forest green
-            'name': 'forest_depths',
-        },
-        {
-            'hue': 15,   # Terra cotta
-            'name': 'terra_cotta',
-        },
-        {
-            'hue': 330,  # Berry pink
-            'name': 'wild_berry',
-        },
-        {
-            'hue': 35,   # Amber brown
-            'name': 'amber_woods',
+            'hue': 20,  # Reddish-brown
+            'name': 'tritanopia_test',
+            'condition': 'tritanopia',
+            'figure_hue': 180,  # Cyan-blue
+            'border': '#E8D0A9',
+            'background_base': '#FFF6E9'
         }
     ]
     
     theme = np.random.choice(themes)
-    background_colors = color_gen.generate_background_palette(theme['hue'])
-    figure_colors = color_gen.generate_figure_palette(theme['hue'])
+    background_colors = color_gen.generate_background_palette(
+        theme['hue'], 
+        theme['condition']
+    )
+    figure_colors = color_gen.generate_figure_palette(
+        theme['figure_hue'], 
+        theme['condition']
+    )
     
     return {
         'name': theme['name'],
         'colors': {
             'background': background_colors,
             'figure': figure_colors,
-            'border': '#E8D0A9',
-            'background_base': '#FFF6E9'
+            'border': theme['border'],
+            'background_base': theme['background_base']
         }
     }
