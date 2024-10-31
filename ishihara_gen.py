@@ -79,6 +79,18 @@ class IshiharaPlateGenerator:
         self.create_boundary()
 
 
+    def is_inside_main_circle(self, x, y):
+        """Check if a point is inside the main circle"""
+        return (x - self.center_x)**2 + (y - self.center_y)**2 <= self.main_circle_radius**2
+    
+    def is_inside_number(self, x, y):
+        """Check if a point is inside the number area"""
+        # Convert world coordinates to grid coordinates
+        grid_x = (x - self.number_x) / self.number_width * self.bin_num.shape[1]
+        grid_y = (y - self.number_y) / self.number_height * self.bin_num.shape[0]
+        
+        # Check if inside the number area
+        return 0 <= grid_x < self.bin_num.shape[1] and 0 <= grid_y < self.bin_num.shape[0] and self.bin_num[int(grid_y)][int(grid_x)]
 
 
     def setup_number_transform(self):
