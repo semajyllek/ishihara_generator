@@ -24,7 +24,8 @@ from .number_grids import NUMBER_FIVE
 
 # Fixed constants for circle sizes
 LARGE_CIRCLE_DIAMETER = 800  # pixels
-SMALL_CIRCLE_DIAMETERS = [40, 44, 48, 52]  # pixels
+SMALL_CIRCLE_DIAMETERS = [24, 28, 32, 36, 40, 44, 48, 52]  # Wider range of sizes
+
 GRID_SIZE = 20
 FONT_SIZE = 128
 DEMO_NUMBER = 5
@@ -128,27 +129,32 @@ class IshiharaPlateGenerator:
 
     def add_circles_batch(self, num_circles):
         circles = []
-        spread = self.rect_width * 0.45
-
-        for _ in range(num_circles):
+        # Use golden ratio for more natural-looking distribution
+        golden_ratio = (1 + 5 ** 0.5) / 2
+        
+        for i in range(num_circles):
             radius = random.choice(self.small_circle_radii)
-
-            x = self.center_x + random.uniform(-spread, spread)
+            
+            # Create a more organic distribution
+            angle = i * golden_ratio * 2 * math.pi
+            r = random.uniform(0, self.rect_width * 0.45)
+            
+            x = self.center_x + r * math.cos(angle)
             y = self.center_y - self.rect_height//2 + random.uniform(-50, 0)
-
+            
             mass = 1.0
             moment = pymunk.moment_for_circle(mass, 0, radius)
             body = pymunk.Body(mass, moment)
             body.position = x, y
-
+            
             shape = pymunk.Circle(body, radius - 0.5)
             shape.friction = 0.7
             shape.elasticity = 0.1
             shape.collision_type = 1
-
+            
             self.space.add(body, shape)
             circles.append((shape, radius))
-
+            
         return circles
 
     def create_initial_images(self):

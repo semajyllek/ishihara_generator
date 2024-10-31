@@ -1,28 +1,29 @@
 # palettes.yaml
 deuteranopia_palettes:
   warm_autumn:
-    name: "Warm Autumn"
-    description: "Warm earthy tones with forest green contrast"
-    type: "deuteranopia"
     colors:
       background:
-        - "#FF7E5F"
-        - "#FEB47B"
-        - "#FF9966"
-        - "#FFB88C"
-        - "#FFA07A"
-        - "#FFDAB9"
-        - "#FFC3A0"
-        - "#FFE5B4"
+        - "#FF7E5F"  # Bright coral
+        - "#FF9966"  # Salmon
+        - "#FFA07A"  # Light salmon
+        - "#FFB88C"  # Peach
+        - "#FFD4B8"  # Light peach
+        - "#FFDAB9"  # Papaya whip
+        - "#FFE4C4"  # Bisque
+        - "#E8927C"  # Darker coral
+        - "#F4A460"  # Sandy brown
+        - "#DEB887"  # Burlywood
+        - "#D2691E"  # Chocolate
       figure:
-        - "#2D5A27"
-        - "#1B4B1E"
-        - "#4B7B3B"
-        - "#3A5F38"
-        - "#2F5233"
-        - "#5B8C5A"
-        - "#3E6B35"
-        - "#4A7023"
+        - "#228B22"  # Forest green
+        - "#32CD32"  # Lime green
+        - "#3CB371"  # Medium sea green
+        - "#2E8B57"  # Sea green
+        - "#236B2A"  # Darker green
+        - "#44A938"  # Medium green
+        - "#1B4D2E"  # Very dark green
+        - "#4B7355"  # Sage green
+        - "#50C878"  # Emerald
       border: "#E8D0A9"
       background_base: "#FFF6E9"
     metadata:
