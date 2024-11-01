@@ -137,6 +137,7 @@ class IshiharaPlateGenerator:
     def create_number_boundary(self):
         """Create physical boundaries for the number region"""
         body = pymunk.Body(body_type=pymunk.Body.STATIC)
+        self.space.add(body)  # Add body to space first
         
         # Convert binary grid to boundary segments
         resolution = 8  # Points every 8 pixels
@@ -169,7 +170,8 @@ class IshiharaPlateGenerator:
                 self.space.add(segment)
         
         return body
-
+    
+    
     def add_circles_to_number(self, target_circles=100):
         """Add circles within the number space using physics"""
         circles = []
