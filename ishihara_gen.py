@@ -273,7 +273,6 @@ class IshiharaPlateGenerator:
         self.number_x = self.center_x - self.number_width/2
         self.number_y = self.center_y - self.number_height/2
 
-
     def add_circles_to_number(self, target_circles=200):
         """Add circles within the number space using physics"""
         circles = []
@@ -386,54 +385,55 @@ class IshiharaPlateGenerator:
         return number_circles + background_circles
 
 
-
-        def create_number_boundary(self):
-            """Create physical boundaries for both the number and main circle"""
-            body = pymunk.Body(body_type=pymunk.Body.STATIC)
-            self.space.add(body)
-            
-            # First create the main circle boundary
-            num_segments = 32  # Number of segments to approximate circle
-            for i in range(num_segments):
-                angle1 = 2 * math.pi * i / num_segments
-                angle2 = 2 * math.pi * (i + 1) / num_segments
-                p1 = (self.center_x + math.cos(angle1) * self.main_circle_radius,
-                    self.center_y + math.sin(angle1) * self.main_circle_radius)
-                p2 = (self.center_x + math.cos(angle2) * self.main_circle_radius,
-                    self.center_y + math.sin(angle2) * self.main_circle_radius)
+    def create_number_boundary(self):
+        """Create physical boundaries for both the number and main circle"""
+        body = pymunk.Body(body_type=pymunk.Body.STATIC)
+        self.space.add(body)
+        
+        # First create the main circle boundary
+        num_segments = 32  # Number of segments to approximate circle
+        for i in range(num_segments):
+            angle1 = 2 * math.pi * i / num_segments
+            angle2 = 2 * math.pi * (i + 1) / num_segments
+            p1 = (self.center_x + math.cos(angle1) * self.main_circle_radius,
+                self.center_y + math.sin(angle1) * self.main_circle_radius)
+            p2 = (self.center_x + math.cos(angle2) * self.main_circle_radius,
+                self.center_y + math.sin(angle2) * self.main_circle_radius)
+            segment = pymunk.Segment(body, p1, p2, 1.0)
+            segment.friction = 0.7
+            segment.elasticity = 0.1
+            self.space.add(segment)
+        
+        # Then create the number boundary
+        points = []
+        for y in range(self.bin_num.shape[0]):
+            for x in range(self.bin_num.shape[1]):
+                if self.bin_num[y][x]:
+                    # Get neighboring cells
+                    for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
+                        nx, ny = x + dx, y + dy
+                        if (0 <= nx < self.bin_num.shape[1] and 
+                            0 <= ny < self.bin_num.shape[0]):
+                            if not self.bin_num[ny][nx]:
+                                # This is a boundary cell
+                                world_x = self.number_x + (x * self.number_width / self.bin_num.shape[1])
+                                world_y = self.number_y + (y * self.number_height / self.bin_num.shape[0])
+                                points.append((world_x, world_y))
+        
+        # Create segments for the number boundary
+        if points:
+            for i in range(len(points)):
+                p1 = points[i]
+                p2 = points[(i + 1) % len(points)]
                 segment = pymunk.Segment(body, p1, p2, 1.0)
                 segment.friction = 0.7
                 segment.elasticity = 0.1
                 self.space.add(segment)
-            
-            # Then create the number boundary
-            points = []
-            for y in range(self.bin_num.shape[0]):
-                for x in range(self.bin_num.shape[1]):
-                    if self.bin_num[y][x]:
-                        # Get neighboring cells
-                        for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
-                            nx, ny = x + dx, y + dy
-                            if (0 <= nx < self.bin_num.shape[1] and 
-                                0 <= ny < self.bin_num.shape[0]):
-                                if not self.bin_num[ny][nx]:
-                                    # This is a boundary cell
-                                    world_x = self.number_x + (x * self.number_width / self.bin_num.shape[1])
-                                    world_y = self.number_y + (y * self.number_height / self.bin_num.shape[0])
-                                    points.append((world_x, world_y))
-            
-            # Create segments for the number boundary
-            if points:
-                for i in range(len(points)):
-                    p1 = points[i]
-                    p2 = points[(i + 1) % len(points)]
-                    segment = pymunk.Segment(body, p1, p2, 1.0)
-                    segment.friction = 0.7
-                    segment.elasticity = 0.1
-                    self.space.add(segment)
-            
-            return body
+        
+        return body
 
+
+  
 
     def check_coverage(self, circles):
         """Improved coverage checking with grid-based sampling"""
