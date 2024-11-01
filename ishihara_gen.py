@@ -92,13 +92,6 @@ class IshiharaPlateGenerator:
         # Check if inside the number area
         return 0 <= grid_x < self.bin_num.shape[1] and 0 <= grid_y < self.bin_num.shape[0] and self.bin_num[int(grid_y)][int(grid_x)]
 
-    def setup_number_transform(self):
-        """Pre-compute coordinate transformation constants"""
-        self.number_width = self.main_circle_radius * 1.4
-        self.number_height = self.main_circle_radius * 1.4
-        self.number_x = self.center_x - self.number_width/2
-        self.number_y = self.center_y - self.number_height/2 - self.main_circle_radius * 0.1
-
     def draw_base_circle(self, draw):
         """Draw the main background circle and inner decorative ring"""
         draw.ellipse([
@@ -134,44 +127,9 @@ class IshiharaPlateGenerator:
         sizes = [48, 40, 32, 28, 24, 20, 16, 12, 10, 8, 6]  # pixels diameter
         return [s//2 for s in sizes]  # Convert to radii
 
-    def create_number_boundary(self):
-        """Create physical boundaries for the number region"""
-        body = pymunk.Body(body_type=pymunk.Body.STATIC)
-        self.space.add(body)  # Add body to space first
-        
-        # Convert binary grid to boundary segments
-        resolution = 8  # Points every 8 pixels
-        points = []
-        
-        # Find boundary points of the number
-        for y in range(self.bin_num.shape[0]):
-            for x in range(self.bin_num.shape[1]):
-                if self.bin_num[y][x]:
-                    # Get neighboring cells
-                    neighbors = []
-                    for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
-                        nx, ny = x + dx, y + dy
-                        if (0 <= nx < self.bin_num.shape[1] and 
-                            0 <= ny < self.bin_num.shape[0]):
-                            if not self.bin_num[ny][nx]:
-                                # This is a boundary cell
-                                world_x = self.number_x + (x * self.number_width / self.bin_num.shape[1])
-                                world_y = self.number_y + (y * self.number_height / self.bin_num.shape[0])
-                                points.append((world_x, world_y))
-        
-        # Create segments for the number boundary
-        if points:
-            for i in range(len(points)):
-                p1 = points[i]
-                p2 = points[(i + 1) % len(points)]
-                segment = pymunk.Segment(body, p1, p2, 1.0)
-                segment.friction = 0.7
-                segment.elasticity = 0.1
-                self.space.add(segment)
-        
-        return body
+
     
-    
+
     def add_circles_to_number(self, target_circles=100):
         """Add circles within the number space using physics"""
         circles = []
@@ -305,17 +263,73 @@ class IshiharaPlateGenerator:
         
         return circles
 
+    def setup_number_transform(self):
+        """Pre-compute coordinate transformation constants"""
+        # Make number area larger relative to main circle
+        self.number_width = self.main_circle_radius * 0.8  # Reduced from 1.4
+        self.number_height = self.main_circle_radius * 0.8  # Reduced from 1.4
+        # Adjust position to be more centered
+        self.number_x = self.center_x - self.number_width/2
+        self.number_y = self.center_y - self.number_height/2
+
+    def create_number_boundary(self):
+        """Create physical boundaries for both the number and main circle"""
+        body = pymunk.Body(body_type=pymunk.Body.STATIC)
+        self.space.add(body)
+        
+        # First create the main circle boundary
+        num_segments = 32  # Number of segments to approximate circle
+        for i in range(num_segments):
+            angle1 = 2 * math.pi * i / num_segments
+            angle2 = 2 * math.pi * (i + 1) / num_segments
+            p1 = (self.center_x + math.cos(angle1) * self.main_circle_radius,
+                self.center_y + math.sin(angle1) * self.main_circle_radius)
+            p2 = (self.center_x + math.cos(angle2) * self.main_circle_radius,
+                self.center_y + math.sin(angle2) * self.main_circle_radius)
+            segment = pymunk.Segment(body, p1, p2, 1.0)
+            segment.friction = 0.7
+            segment.elasticity = 0.1
+            self.space.add(segment)
+        
+        # Then create the number boundary
+        points = []
+        for y in range(self.bin_num.shape[0]):
+            for x in range(self.bin_num.shape[1]):
+                if self.bin_num[y][x]:
+                    # Get neighboring cells
+                    for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
+                        nx, ny = x + dx, y + dy
+                        if (0 <= nx < self.bin_num.shape[1] and 
+                            0 <= ny < self.bin_num.shape[0]):
+                            if not self.bin_num[ny][nx]:
+                                # This is a boundary cell
+                                world_x = self.number_x + (x * self.number_width / self.bin_num.shape[1])
+                                world_y = self.number_y + (y * self.number_height / self.bin_num.shape[0])
+                                points.append((world_x, world_y))
+        
+        # Create segments for the number boundary
+        if points:
+            for i in range(len(points)):
+                p1 = points[i]
+                p2 = points[(i + 1) % len(points)]
+                segment = pymunk.Segment(body, p1, p2, 1.0)
+                segment.friction = 0.7
+                segment.elasticity = 0.1
+                self.space.add(segment)
+        
+        return body
+
     def run_physics_simulation(self):
         """Two-phase physics simulation with number-first approach"""
         # Set up physics space
         self.space.gravity = (0.0, 900.0)
         self.space.damping = 0.8
         
-        # Create number boundary
+        # Create boundaries
         self.create_number_boundary()
         
         # First phase: Pack the number
-        number_circles = self.add_circles_to_number(150)
+        number_circles = self.add_circles_to_number(200)  # Increased from 150
         
         # Let number circles settle
         for _ in range(60):
@@ -329,7 +343,6 @@ class IshiharaPlateGenerator:
             self.space.step(1/60.0)
         
         return number_circles + background_circles
-           
   
 
     def check_coverage(self, circles):
