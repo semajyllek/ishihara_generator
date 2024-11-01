@@ -306,7 +306,7 @@ class IshiharaPlateGenerator:
         target_per_size = target_circles / len(radii)
         
         # Start with a grid of positions for more even distribution
-        grid_step = min(radii[-1] * 2)  # Use smallest radius for grid
+        grid_step = radii[-1] * 2  # Just use smallest radius * 2 for grid
         positions = []
         for y in np.arange(min_y, max_y, grid_step):
             for x in np.arange(min_x, max_x, grid_step):
