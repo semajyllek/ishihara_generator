@@ -76,7 +76,7 @@ class IshiharaPlateGenerator:
         # Pre-compute the transformed coordinates for number checking
         self.setup_number_transform()
 
-        self.create_boundary()
+        self.create_number_boundary()
 
 
     def is_inside_main_circle(self, x, y):
