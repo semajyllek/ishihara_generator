@@ -282,49 +282,95 @@ class IshiharaPlateGenerator:
         return available_radii, weights
 
     def add_circles_to_number(self, target_circles=1000):
-        """Fill number with improved edge and contour following"""
+        """Fill number with dense packing while following contours"""
         circles = []
         radii = self.get_circle_sizes()
+        spacing = 0.5
+        
+        # Get number bounds for grid creation
+        min_x = float('inf')
+        max_x = float('-inf')
+        min_y = float('inf')
+        max_y = float('-inf')
+        
+        for y in range(self.bin_num.shape[0]):
+            for x in range(self.bin_num.shape[1]):
+                if self.bin_num[y][x]:
+                    world_x = self.number_x + (x * self.number_width / self.bin_num.shape[1])
+                    world_y = self.number_y + (y * self.number_height / self.bin_num.shape[0])
+                    min_x = min(min_x, world_x)
+                    max_x = max(max_x, world_x)
+                    min_y = min(min_y, world_y)
+                    max_y = max(max_y, world_y)
+        
+        # Create dense grid of starting positions
+        grid_size = min(radii) * 1.5  # Tighter grid
+        positions = []
+        for y in np.arange(min_y, max_y, grid_size):
+            row_offset = (grid_size / 2) * ((int(y / grid_size) % 2))  # Offset alternate rows
+            for x in np.arange(min_x, max_x, grid_size):
+                if self.is_inside_number(x + row_offset, y):
+                    positions.append((x + row_offset, y))
+        
+        # Shuffle positions but prioritize edge positions
         edge_points = self.find_edge_points()
+        edge_positions = []
+        interior_positions = []
         
-        # First pass: Place circles along edges
-        for edge_x, edge_y in edge_points:
-            # Try smaller circles first for edge definition
-            for radius in reversed(radii[:4]):  # Use smaller subset for edges
-                if self.try_place_circle(edge_x, edge_y, radius):
-                    shape = self.create_physics_circle(edge_x, edge_y, radius)
-                    circles.append((shape, radius))
-                    break
-
-        # Generate initial positions for interior filling
-        positions_to_try = []
-        for circle, radius in circles:
-            positions_to_try.extend(self.get_nesting_positions(circle, radius))
-        random.shuffle(positions_to_try)
+        for pos in positions:
+            min_edge_dist = min(math.sqrt((pos[0] - ex)**2 + (pos[1] - ey)**2) 
+                            for ex, ey in edge_points)
+            if min_edge_dist < grid_size * 2:
+                edge_positions.append(pos)
+            else:
+                interior_positions.append(pos)
+                
+        random.shuffle(edge_positions)
+        random.shuffle(interior_positions)
+        positions = edge_positions + interior_positions
         
-        # Fill interior
-        while positions_to_try and len(circles) < target_circles:
-            x, y = positions_to_try.pop(0)
+        # Place circles
+        while positions and len(circles) < target_circles:
+            x, y = positions.pop(0)
             
-            # Get appropriate radii and weights for this position
-            available_radii, weights = self.get_size_weights_for_position(x, y, edge_points, radii)
+            # Determine appropriate sizes based on position
+            min_edge_dist = min(math.sqrt((x - ex)**2 + (y - ey)**2) 
+                            for ex, ey in edge_points)
             
-            # Try to place circle
+            if min_edge_dist < grid_size * 2:
+                # Near edges - prefer smaller circles
+                available_radii = radii[len(radii)//2:]
+                weights = self.size_weights[len(radii)//2:]
+            else:
+                # Interior - use full range with normal distribution
+                available_radii = radii
+                weights = self.size_weights
+            
+            # Normalize weights
+            weights = [w/sum(weights) for w in weights]
+            
+            # Try placing circles
             for radius in random.choices(available_radii, weights=weights, k=len(available_radii)):
                 if self.try_place_circle(x, y, radius):
                     shape = self.create_physics_circle(x, y, radius)
                     circles.append((shape, radius))
                     
-                    # Add new positions around this circle
-                    positions_to_try.extend(self.get_nesting_positions(shape, radius))
+                    # Add new positions around successful placement
+                    for angle in range(0, 360, 30):  # More angles for denser packing
+                        rad = math.radians(angle)
+                        for dist_factor in [0.9, 1.1]:  # Tighter spacing factors
+                            new_x = x + math.cos(rad) * (radius * 2) * dist_factor
+                            new_y = y + math.sin(rad) * (radius * 2) * dist_factor
+                            if self.is_inside_number(new_x, new_y):
+                                positions.append((new_x, new_y))
                     break
         
-        # Let physics settle
-        for _ in range(60):
+        # Final settling
+        for _ in range(30):
             self.space.step(1/60.0)
         
         return circles
-        
+            
 
 
 
