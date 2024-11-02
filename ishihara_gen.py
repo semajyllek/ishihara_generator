@@ -347,6 +347,7 @@ class IshiharaPlateGenerator:
         return number_circles
 
 
+
     def create_number_boundary(self):
         """Create physical boundaries for both the number and main circle"""
         body = pymunk.Body(body_type=pymunk.Body.STATIC)
@@ -366,34 +367,20 @@ class IshiharaPlateGenerator:
             segment.elasticity = 0.1
             self.space.add(segment)
         
-        # Then create the number boundary
-        points = []
-        for y in range(self.bin_num.shape[0]):
-            for x in range(self.bin_num.shape[1]):
-                if self.bin_num[y][x]:
-                    # Get neighboring cells
-                    for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
-                        nx, ny = x + dx, y + dy
-                        if (0 <= nx < self.bin_num.shape[1] and 
-                            0 <= ny < self.bin_num.shape[0]):
-                            if not self.bin_num[ny][nx]:
-                                # This is a boundary cell
-                                world_x = self.number_x + (x * self.number_width / self.bin_num.shape[1])
-                                world_y = self.number_y + (y * self.number_height / self.bin_num.shape[0])
-                                points.append((world_x, world_y))
+        # Find edge points of the number
+        edge_points = self.find_edge_points()
         
         # Create segments for the number boundary
-        if points:
-            for i in range(len(points)):
-                p1 = points[i]
-                p2 = points[(i + 1) % len(points)]
+        if edge_points:
+            for i in range(len(edge_points)):
+                p1 = edge_points[i]
+                p2 = edge_points[(i + 1) % len(edge_points)]
                 segment = pymunk.Segment(body, p1, p2, 1.0)
                 segment.friction = 0.7
                 segment.elasticity = 0.1
                 self.space.add(segment)
         
         return body
-
 
 
 
