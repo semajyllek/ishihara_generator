@@ -275,18 +275,14 @@ class IshiharaPlateGenerator:
     def add_circles_to_number(self, target_circles=1000):
         """Fill number with dense packing while following contours"""
         circles = []
-        spacing = 1.7  
+        spacing = 2.0  # Increased from 1.5
         
         # Get number bounds
         min_x, max_x, min_y, max_y = self.find_number_bounds()
         
         # Create initial grid of positions with larger spacing
-        grid_size = min(self.get_circle_sizes()) * 2.2  
+        grid_size = min(self.get_circle_sizes()) * 2.2  # Increased from 1.8
         positions = self.generate_initial_positions(min_x, max_x, min_y, max_y, grid_size)
-        
-        # Find edge points and sort positions
-        edge_points = self.find_edge_points()
-        positions = self.sort_positions_by_edge_proximity(positions, edge_points, grid_size)
         
         # Place circles
         while positions and len(circles) < target_circles:
