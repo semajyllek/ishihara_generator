@@ -408,6 +408,8 @@ class IshiharaPlateGenerator:
                 pos.y + radius
             ], fill=color)
 
+
+
     def draw_circles(self, circles_draw, circle_regions):
         """Improved color distribution while maintaining simplicity"""
         # Separate circles into figure and background groups
@@ -424,21 +426,23 @@ class IshiharaPlateGenerator:
             else:
                 background_circles.append((circle, radius))
         
-        # Shuffle both groups
+        # Shuffle the order to avoid patterns
         random.shuffle(figure_circles)
-        random.shuffle(background_circles)
         
-        # Draw background circles with varying colors
-        for i, (circle, radius) in enumerate(background_circles):
-            color_index = (i * 3) % len(self.background_colors)  # Skip colors for more variety
-            color = self.background_colors[color_index]
-            self.draw_circle_with_gradient(circles_draw, circle.body.position, radius, color)
+        # Draw figure circles with distinct variations
+        base_colors = [
+            '#FF6B4D',  # Coral
+            '#FF8463',  # Light coral
+            '#FF4D27',  # Bright orange-red
+            '#E84D1C',  # Deep orange
+            '#FF5533',  # True orange-red
+        ]
         
-        # Draw figure circles with varying colors
         for i, (circle, radius) in enumerate(figure_circles):
-            color_index = (i * 3) % len(self.figure_colors)  # Skip colors for more variety
-            color = self.figure_colors[color_index]
+            # Select color randomly for each circle
+            color = random.choice(base_colors)
             self.draw_circle_with_gradient(circles_draw, circle.body.position, radius, color)
+
 
     def color_difference(self, color1, color2):
         """Calculate approximate color difference in RGB space"""
@@ -503,10 +507,56 @@ class IshiharaPlateGenerator:
                 self.center_y + self.main_circle_radius + i
             ], fill=None, outline='black', width=3)
 
+    # def generate_plate(self):
+    #     """Optimized plate generation"""
+    #     self.space.iterations = 20  # Reduced iterations
+        
+    #     # Run physics simulation
+    #     circles = self.run_physics_simulation()
+        
+    #     # Create images
+    #     img = Image.new('RGB', (self.width, self.height), 'white')
+    #     mask = Image.new('L', (self.width, self.height), 0)
+    #     circles_img = Image.new('RGB', (self.width, self.height), self.background_base)
+        
+    #     # Use faster drawing contexts
+    #     mask_draw = ImageDraw.Draw(mask)
+    #     circles_draw = ImageDraw.Draw(circles_img)
+        
+    #     # Draw base elements
+    #     self.draw_base_circle(circles_draw)
+    #     self.create_circle_mask(mask_draw)
+        
+    #     # Batch process circles by color
+    #     figure_circles = []
+    #     background_circles = []
+        
+    #     for circle, radius in circles:
+    #         pos = circle.body.position
+    #         if self.is_inside_number(pos.x, pos.y):
+    #             figure_circles.append((pos, radius))
+    #         else:
+    #             background_circles.append((pos, radius))
+        
+    #     # Draw circles by color groups
+    #     for circles_group, color in [
+    #         (background_circles, self.get_next_background_color()),
+    #         (figure_circles, self.get_next_figure_color())
+    #     ]:
+    #         for pos, radius in circles_group:
+    #             self.draw_circle_with_gradient(circles_draw, pos, radius, color)
+        
+    #     # Composite images
+    #     img.paste(circles_img, (0, 0), mask)
+        
+    #     # Draw border
+    #     final_draw = ImageDraw.Draw(img)
+    #     self.draw_bold_border(final_draw)
+        
+    #     return img, circles
+
     def generate_plate(self):
         """Optimized plate generation"""
-        self.space.iterations = 20  # Reduced iterations
-        
         # Run physics simulation
         circles = self.run_physics_simulation()
         
@@ -523,24 +573,8 @@ class IshiharaPlateGenerator:
         self.draw_base_circle(circles_draw)
         self.create_circle_mask(mask_draw)
         
-        # Batch process circles by color
-        figure_circles = []
-        background_circles = []
-        
-        for circle, radius in circles:
-            pos = circle.body.position
-            if self.is_inside_number(pos.x, pos.y):
-                figure_circles.append((pos, radius))
-            else:
-                background_circles.append((pos, radius))
-        
-        # Draw circles by color groups
-        for circles_group, color in [
-            (background_circles, self.get_next_background_color()),
-            (figure_circles, self.get_next_figure_color())
-        ]:
-            for pos, radius in circles_group:
-                self.draw_circle_with_gradient(circles_draw, pos, radius, color)
+        # Use our improved drawing method
+        self.draw_circles(circles_draw, circles)
         
         # Composite images
         img.paste(circles_img, (0, 0), mask)
