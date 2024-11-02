@@ -33,6 +33,7 @@ FONT_URL = 'https://www.1001fonts.com/download/niconne.zip'
 class IshiharaPlateGenerator:
     def __init__(self, num: int = DEMO_NUMBER, font_zip_url: Optional[str] = FONT_URL):
 
+        self.get_circle_sizes() 
 
         # creates binary grids with stylistic integer mask
         self.renderer = DigitRenderer(font_size=FONT_SIZE, font_path=get_tff(font_zip_url))
@@ -136,6 +137,10 @@ class IshiharaPlateGenerator:
             10,  # Very small - common
             8    # Tiny - for filling gaps
         ]
+        
+        # Set weights as class attribute
+        self.size_weights = [0.10, 0.012, 0.08, 0.26, 0.18, 0.08, 0.06]  # Adds to 1.0
+        
         # Convert to radii
         radii = [s//2 for s in sizes]
         print(f"Generated circle radii: {radii}")  # Debug print
