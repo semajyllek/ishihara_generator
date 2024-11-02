@@ -471,22 +471,18 @@ class IshiharaPlateGenerator:
         self.current_bg_color_index = (self.current_bg_color_index + 1) % len(self.background_colors)
         return color
 
-
     def get_next_figure_color(self, last_color=None):
-        """Get next figure color with subtle variations like the sample"""
-        # Base orange/reddish color from the sample with slight variations
-        base_hue = 20  # Orange-red base
+        """Get next figure color with more noticeable variations"""
         colors = [
-            # Slightly darker and more red
-            '#E85D35',  # Base orange-red
-            '#E56845',  # Slightly lighter
-            '#EA6B3A',  # Touch warmer
-            '#E75525',  # Touch darker
-            '#EC7242',  # Slightly brighter
+            '#FF5733',  # Bright orange-red
+            '#E84D1C',  # Deeper orange
+            '#FF704D',  # Lighter orange-red
+            '#D44124',  # Darker orange-red
+            '#FF8566'   # Light coral
         ]
         
         if last_color is not None:
-            # Avoid picking the same color twice in a row
+            # Ensure some variation by avoiding recent colors
             available_colors = [c for c in colors if c != last_color]
             color = random.choice(available_colors)
         else:
