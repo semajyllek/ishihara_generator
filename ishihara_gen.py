@@ -219,12 +219,17 @@ class IshiharaPlateGenerator:
 
 
         if min_edge_dist < grid_size * 2:
-            available_radii = self.get_circle_sizes()[-4:]  # Limit to smaller radii near edges
-            weights = self.size_weights[-4:]
+            # Random chance to allow larger circles on the edge
+            if random.random() < 0.15:  # 15% chance to allow larger circles
+                available_radii = self.get_circle_sizes()
+                weights = self.size_weights
+            else:
+                available_radii = self.get_circle_sizes()[-4:]  # Otherwise limit to smaller radii
+                weights = self.size_weights[-4:]
         else:
             available_radii = self.get_circle_sizes()
             weights = self.size_weights
-        
+
         weights = [w/sum(weights) for w in weights]
         return available_radii, weights
 
