@@ -203,19 +203,39 @@ class IshiharaPlateGenerator:
         # Adjusted weights to closer match sample
         self.size_weights = [0.002, 0.008, 0.05, 0.20, 0.35, 0.25, 0.11, 0.03]  # Adds to 1.0
         return [s//2 for s in sizes]  # Convert to radii
+    
 
     def add_circles_to_number(self, target_circles=1000):
-        """Fill number completely with circles"""
+        """Fill number with improved edge and contour following"""
         circles = []
         radii = self.get_circle_sizes()
-        spacing = 0.5  # Minimal spacing between circles
+        spacing = 0.5
         
+        # First, get all edge points of the number
+        edge_points = []
+        for y in range(1, self.bin_num.shape[0] - 1):
+            for x in range(1, self.bin_num.shape[1] - 1):
+                if self.bin_num[y][x]:
+                    # Check if this is an edge pixel by looking at neighbors
+                    is_edge = False
+                    for dy in [-1, 0, 1]:
+                        for dx in [-1, 0, 1]:
+                            if not self.bin_num[y + dy][x + dx]:
+                                is_edge = True
+                                break
+                        if is_edge:
+                            break
+                            
+                    if is_edge:
+                        world_x = self.number_x + (x * self.number_width / self.bin_num.shape[1])
+                        world_y = self.number_y + (y * self.number_height / self.bin_num.shape[0])
+                        # Store edge angle for better circle placement
+                        edge_points.append((world_x, world_y))
+
         def try_place_circle(x, y, radius):
-            """Check if a circle can be placed at position"""
             if not self.is_inside_number(x, y):
                 return False
                 
-            # Check overlap with existing circles
             for shape in self.space.shapes:
                 if isinstance(shape, pymunk.Circle):
                     dist = math.sqrt((x - shape.body.position.x)**2 + 
@@ -223,66 +243,69 @@ class IshiharaPlateGenerator:
                     if dist < (radius + shape.radius + spacing):
                         return False
             return True
-        
-        # Start with the center point of each pixel in the number
-        start_positions = []
-        for y in range(self.bin_num.shape[0]):
-            for x in range(self.bin_num.shape[1]):
-                if self.bin_num[y][x]:
-                    world_x = self.number_x + (x + 0.5) * (self.number_width / self.bin_num.shape[1])
-                    world_y = self.number_y + (y + 0.5) * (self.number_height / self.bin_num.shape[0])
-                    start_positions.append((world_x, world_y))
-        
-        if not start_positions:
-            print("No valid start positions found in number!")
-            return circles
-            
-        print(f"Found {len(start_positions)} initial positions in number")
-        
-        positions_to_try = start_positions.copy()
-        random.shuffle(positions_to_try)
-        attempted_positions = set()
-        
-        while positions_to_try and len(circles) < target_circles:
-            current_x, current_y = positions_to_try.pop(0)
-            pos_key = (round(current_x/spacing), round(current_y/spacing))
-            
-            if pos_key in attempted_positions:
-                continue
-                
-            attempted_positions.add(pos_key)
-            
-            # Try each radius in sequence from largest to smallest
-            for radius in radii:
-                if try_place_circle(current_x, current_y, radius):
-                    # Place circle
+
+        # First pass: Place circles along edges
+        for edge_x, edge_y in edge_points:
+            # Try smaller circles first for edge definition
+            for radius in reversed(radii[:4]):  # Use smaller subset for edges
+                if try_place_circle(edge_x, edge_y, radius):
                     body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
-                    body.position = (current_x, current_y)
+                    body.position = (edge_x, edge_y)
+                    shape = pymunk.Circle(body, radius)
+                    shape.friction = 0.7
+                    shape.elasticity = 0.1
+                    self.space.add(body, shape)
+                    circles.append((shape, radius))
+                    break
+
+        # Second pass: Fill interior using existing circles as guides
+        positions_to_try = []
+        for circle, radius in circles:
+            # Generate positions that would nest against this circle
+            pos = circle.body.position
+            for angle in range(0, 360, 30):
+                rad = math.radians(angle)
+                # Try multiple distances to create natural nesting
+                for dist_factor in [1.0, 1.2, 1.4]:
+                    x = pos.x + math.cos(rad) * (radius * 2) * dist_factor
+                    y = pos.y + math.sin(rad) * (radius * 2) * dist_factor
+                    if self.is_inside_number(x, y):
+                        positions_to_try.append((x, y))
+
+        random.shuffle(positions_to_try)
+        
+        # Fill interior
+        while positions_to_try and len(circles) < target_circles:
+            x, y = positions_to_try.pop(0)
+            
+            # Choose radius based on position (prefer smaller near edges)
+            min_edge_dist = min(math.sqrt((x - ex)**2 + (y - ey)**2) 
+                            for ex, ey in edge_points)
+            if min_edge_dist < 20:
+                available_radii = radii[len(radii)//2:]  # Smaller sizes
+            else:
+                available_radii = radii
+
+            for radius in random.choices(available_radii, weights=self.size_weights, k=len(available_radii)):
+                if try_place_circle(x, y, radius):
+                    body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
+                    body.position = (x, y)
                     shape = pymunk.Circle(body, radius)
                     shape.friction = 0.7
                     shape.elasticity = 0.1
                     self.space.add(body, shape)
                     circles.append((shape, radius))
                     
-                    print(f"Placed circle #{len(circles)} at ({current_x:.1f}, {current_y:.1f}) with radius {radius}")
-                    
-                    # Add new positions to try around this circle
-                    for angle in range(0, 360, 30):  # Every 30 degrees
+                    # Add new positions around successful placement
+                    for angle in range(0, 360, 45):
                         rad = math.radians(angle)
-                        for dist in [radius * 1.8, radius * 2.2]:  # Try two distances
-                            new_x = current_x + dist * math.cos(rad)
-                            new_y = current_y + dist * math.sin(rad)
+                        for dist_factor in [1.0, 1.2]:
+                            new_x = x + math.cos(rad) * (radius * 2) * dist_factor
+                            new_y = y + math.sin(rad) * (radius * 2) * dist_factor
                             if self.is_inside_number(new_x, new_y):
                                 positions_to_try.append((new_x, new_y))
-                    
-                    break  # Successfully placed a circle, move to next position
-            
-            # Periodically shuffle remaining positions
-            if len(circles) % 10 == 0:
-                random.shuffle(positions_to_try)
-                print(f"Progress: {len(circles)} circles placed, {len(positions_to_try)} positions remaining to try")
-        
-        print(f"Final result: {len(circles)} circles placed")
+                    break
+
         return circles
 
     def run_physics_simulation(self):
@@ -507,53 +530,7 @@ class IshiharaPlateGenerator:
                 self.center_y + self.main_circle_radius + i
             ], fill=None, outline='black', width=3)
 
-    # def generate_plate(self):
-    #     """Optimized plate generation"""
-    #     self.space.iterations = 20  # Reduced iterations
-        
-    #     # Run physics simulation
-    #     circles = self.run_physics_simulation()
-        
-    #     # Create images
-    #     img = Image.new('RGB', (self.width, self.height), 'white')
-    #     mask = Image.new('L', (self.width, self.height), 0)
-    #     circles_img = Image.new('RGB', (self.width, self.height), self.background_base)
-        
-    #     # Use faster drawing contexts
-    #     mask_draw = ImageDraw.Draw(mask)
-    #     circles_draw = ImageDraw.Draw(circles_img)
-        
-    #     # Draw base elements
-    #     self.draw_base_circle(circles_draw)
-    #     self.create_circle_mask(mask_draw)
-        
-    #     # Batch process circles by color
-    #     figure_circles = []
-    #     background_circles = []
-        
-    #     for circle, radius in circles:
-    #         pos = circle.body.position
-    #         if self.is_inside_number(pos.x, pos.y):
-    #             figure_circles.append((pos, radius))
-    #         else:
-    #             background_circles.append((pos, radius))
-        
-    #     # Draw circles by color groups
-    #     for circles_group, color in [
-    #         (background_circles, self.get_next_background_color()),
-    #         (figure_circles, self.get_next_figure_color())
-    #     ]:
-    #         for pos, radius in circles_group:
-    #             self.draw_circle_with_gradient(circles_draw, pos, radius, color)
-        
-    #     # Composite images
-    #     img.paste(circles_img, (0, 0), mask)
-        
-    #     # Draw border
-    #     final_draw = ImageDraw.Draw(img)
-    #     self.draw_bold_border(final_draw)
-        
-    #     return img, circles
+
 
     def generate_plate(self):
         """Optimized plate generation"""
