@@ -239,18 +239,38 @@ class IshiharaPlateGenerator:
         return available_radii, weights
 
 
+    def try_place_circle(self, x, y, radius, spacing=2.0):  # Increased significantly from 1.5
+        """Check if a circle can be placed at the given position with strict spacing"""
+        if not self.is_inside_number(x, y):
+            return False
+        
+        # Add buffer near edges
+        min_edge_dist = self.main_circle_radius - math.sqrt((x - self.center_x)**2 + (y - self.center_y)**2)
+        if min_edge_dist < spacing * 2:  # Double spacing near edges
+            return False
+        
+        # Check for any nearby circles with increased spacing
+        for shape in self.space.shapes:
+            if isinstance(shape, pymunk.Circle):
+                dist = math.sqrt((x - shape.body.position.x)**2 + 
+                            (y - shape.body.position.y)**2)
+                required_space = (radius + shape.radius + spacing)
+                if dist < required_space * 1.1:  # Add 10% extra buffer
+                    return False
+        return True
+
     def generate_new_positions(self, x, y, radius, spacing):
-        """Generate new candidate positions around a placed circle"""
+        """Generate new candidate positions with increased spacing"""
         new_positions = []
         for angle in range(0, 360, 30):
             rad = math.radians(angle)
-            for dist_factor in [1.5, 1.7]:  # Increased from [1.2, 1.4]
-                new_x = x + math.cos(rad) * (radius * 2 + spacing) * dist_factor
-                new_y = y + math.sin(rad) * (radius * 2 + spacing) * dist_factor
+            for dist_factor in [1.8, 2.0]:  # Increased significantly from [1.5, 1.7]
+                new_x = x + math.cos(rad) * (radius * 2 + spacing * 2) * dist_factor  # Double spacing factor
+                new_y = y + math.sin(rad) * (radius * 2 + spacing * 2) * dist_factor
                 if self.is_inside_number(new_x, new_y):
                     new_positions.append((new_x, new_y))
         return new_positions
-    
+        
 
 
     def add_circles_to_number(self, target_circles=1000):
@@ -295,23 +315,7 @@ class IshiharaPlateGenerator:
         return circles
 
     
-    def try_place_circle(self, x, y, radius, spacing=1.5):  # Increased from 1.2
-        """Check if a circle can be placed at the given position"""
-        if not self.is_inside_number(x, y):
-            return False
-        
-        # Add extra buffer near edges
-        min_edge_dist = self.main_circle_radius - math.sqrt((x - self.center_x)**2 + (y - self.center_y)**2)
-        if min_edge_dist < spacing:
-            return False
-        
-        for shape in self.space.shapes:
-            if isinstance(shape, pymunk.Circle):
-                dist = math.sqrt((x - shape.body.position.x)**2 + 
-                            (y - shape.body.position.y)**2)
-                if dist < (radius + shape.radius + spacing):
-                    return False
-        return True
+
     
 
     def create_physics_circle(self, x, y, radius):
