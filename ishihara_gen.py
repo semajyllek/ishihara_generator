@@ -136,9 +136,10 @@ class IshiharaPlateGenerator:
             10,  # Very small - common
             8    # Tiny - for filling gaps
         ]
-        # Weights based on sample image analysis
-        self.size_weights = [0.10, 0.012, 0.08, 0.26, 0.18, 0.08, 0.06]  # Adds to 1.0
-        return [s//2 for s in sizes]  # Convert to radii
+        # Convert to radii
+        radii = [s//2 for s in sizes]
+        print(f"Generated circle radii: {radii}")  # Debug print
+        return radii
 
 
     def find_number_bounds(self):
@@ -274,15 +275,35 @@ class IshiharaPlateGenerator:
 
     def add_circles_to_number(self, target_circles=1000):
         """Fill number with dense packing while following contours"""
+        print("Starting add_circles_to_number")  # Debug print
+        
+        # Initialize basic parameters
         circles = []
-        spacing = 2.0  # Increased from 1.5
+        spacing = 2.0
+        
+        # Calculate grid size FIRST
+        smallest_radius = min(self.get_circle_sizes())
+        grid_size = smallest_radius * 2.2
+        print(f"Grid size calculated: {grid_size}")  # Debug print
         
         # Get number bounds
         min_x, max_x, min_y, max_y = self.find_number_bounds()
+        print(f"Found bounds: {min_x}, {max_x}, {min_y}, {max_y}")  # Debug print
+        
+        # Find edge points
+        edge_points = self.find_edge_points()
+        print(f"Found {len(edge_points)} edge points")  # Debug print
         
         # Create initial grid of positions with larger spacing
-        edge_points = self.find_edge_points()
-        positions = self.generate_initial_positions(min_x, max_x, min_y, max_y, grid_size)
+        try:
+            positions = self.generate_initial_positions(min_x, max_x, min_y, max_y, grid_size)
+            print(f"Generated {len(positions)} initial positions")  # Debug print
+        except Exception as e:
+            print(f"Error in generate_initial_positions: {e}")
+            raise
+        
+        # Sort positions by edge proximity
+        positions = self.sort_positions_by_edge_proximity(positions, edge_points, grid_size)
         
         # Place circles
         while positions and len(circles) < target_circles:
@@ -307,11 +328,9 @@ class IshiharaPlateGenerator:
         for _ in range(10):
             self.space.step(1/60.0)
         
+        print(f"Finished with {len(circles)} circles")  # Debug print
         return circles
-
-    
-
-    
+        
 
     def create_physics_circle(self, x, y, radius):
         """Create and add a physics circle with more stability"""
@@ -330,6 +349,8 @@ class IshiharaPlateGenerator:
 
     def run_physics_simulation(self):
         """Number filling only"""
+        print("Starting physics simulation")  # Debug print
+        
         # No gravity needed for placement
         self.space.gravity = (0.0, 0.0)
         self.space.damping = 1.0
@@ -339,7 +360,12 @@ class IshiharaPlateGenerator:
         print("Created number boundary")
         
         # Fill number region
-        number_circles = self.add_circles_to_number()
+        try:
+            number_circles = self.add_circles_to_number()
+            print(f"Added {len(number_circles)} circles")  # Debug print
+        except Exception as e:
+            print(f"Error in add_circles_to_number: {e}")
+            raise
         
         if not number_circles:
             print("Failed to place any circles!")
