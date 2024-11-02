@@ -217,10 +217,11 @@ class IshiharaPlateGenerator:
         """Get appropriate radii and weights based on position"""
         min_edge_dist = min(math.sqrt((x - ex)**2 + (y - ey)**2) 
                         for ex, ey in edge_points)
-        
+
+
         if min_edge_dist < grid_size * 2:
-            available_radii = self.get_circle_sizes()[len(self.size_weights)//2:]
-            weights = self.size_weights[len(self.size_weights)//2:]
+            available_radii = self.get_circle_sizes()[-4:]  # Limit to smaller radii near edges
+            weights = self.size_weights[-4:]
         else:
             available_radii = self.get_circle_sizes()
             weights = self.size_weights
