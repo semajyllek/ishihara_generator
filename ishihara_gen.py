@@ -187,21 +187,18 @@ class IshiharaPlateGenerator:
         self.number_x = self.center_x - self.number_width/2
         self.number_y = self.center_y - self.number_height/2
 
-
-
-
     def get_circle_sizes(self):
         """Define 5 circle sizes with appropriate weights based on sample"""
         # Sizes in pixels diameter
         sizes = [
-            40,  # Largest - rare
-            32,  # Large - occasional
-            24,  # Medium - common
-            16,  # Small - very common
+            32,  # Largest - extremely rare now
+            28,  # Large - very rare now
+            24,  # Medium - more common
+            16,  # Small - most common
             12   # Smallest - very common
         ]
-        # Weights determine how often each size is chosen
-        self.size_weights = [0.05, 0.15, 0.25, 0.30, 0.25]  # Adds to 1.0
+        # Adjusted weights
+        self.size_weights = [0.01, 0.04, 0.35, 0.35, 0.25]  # Adds to 1.0
         return [s//2 for s in sizes]  # Convert to radii
 
     def add_circles_to_number(self, target_circles=1000):
