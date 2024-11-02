@@ -21,7 +21,6 @@ from .int_to_grid import DigitRenderer, get_tff
 
 # Fixed constants for circle sizes
 LARGE_CIRCLE_DIAMETER = 800  # pixels
-SMALL_CIRCLE_DIAMETERS = [24, 28, 32, 36, 40, 44, 48, 52]  # Wider range of sizes
 
 GRID_SIZE = 20
 FONT_SIZE = 128
@@ -41,8 +40,6 @@ class IshiharaPlateGenerator:
         
         # circle sizes and positions
         self.main_circle_radius = LARGE_CIRCLE_DIAMETER // 2
-        self.small_circle_radii = [d // 2 for d in SMALL_CIRCLE_DIAMETERS]
-        self.max_small_radius = max(self.small_circle_radii)
 
         self.rect_width = LARGE_CIRCLE_DIAMETER
         self.rect_height = LARGE_CIRCLE_DIAMETER
@@ -65,13 +62,8 @@ class IshiharaPlateGenerator:
         # color palette 
         selected_palette = generate_ishihara_palette()
         
-        self.background_colors = selected_palette['colors']['background']
-        self.figure_colors = selected_palette['colors']['figure']
         self.border_color = selected_palette['colors']['border']
         self.background_base = selected_palette['colors']['background_base']
-        
-        self.current_bg_color_index = 0
-        self.current_fg_color_index = 0
         
         # Pre-compute the transformed coordinates for number checking
         self.setup_number_transform()
@@ -122,62 +114,6 @@ class IshiharaPlateGenerator:
         ], fill=255)
 
     
-    def fill_background(self, existing_circles):
-        """Fill the background using physics simulation"""
-        circles = []
-        radii = sorted(self.small_circle_radii, reverse=True)
-        
-        # Use golden ratio spiral for initial placement
-        max_attempts = 2000
-        golden_angle = math.pi * (3 - math.sqrt(5))
-        
-        size_distribution = {r: 0 for r in radii}
-        target_per_size = max_attempts / len(radii)
-        
-        for i in range(max_attempts):
-            # Choose radius ensuring good distribution
-            available_radii = [r for r in radii if size_distribution[r] < target_per_size * 1.2]
-            if not available_radii:
-                available_radii = radii
-            radius = random.choice(available_radii)
-            
-            # Generate position using golden angle spiral
-            r = math.sqrt(i / max_attempts) * (self.main_circle_radius - radius)
-            theta = i * golden_angle
-            x = self.center_x + r * math.cos(theta)
-            y = self.center_y + r * math.sin(theta)
-            
-            # Check position validity
-            if not self.is_inside_main_circle(x, y) or self.is_inside_number(x, y):
-                continue
-            
-            # Check overlap
-            overlaps = False
-            for shape in self.space.shapes:
-                if isinstance(shape, pymunk.Circle):
-                    dist = math.sqrt((x - shape.body.position.x)**2 + 
-                                (y - shape.body.position.y)**2)
-                    if dist < (radius + shape.radius + 1):
-                        overlaps = True
-                        break
-            
-            if not overlaps:
-                body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
-                body.position = (x, y)
-                shape = pymunk.Circle(body, radius)
-                shape.friction = 0.7
-                shape.elasticity = 0.1
-                self.space.add(body, shape)
-                circles.append((shape, radius))
-                size_distribution[radius] += 1
-                
-                # Mini physics step
-                for _ in range(10):
-                    self.space.step(1/60.0)
-        
-        return circles
-
-
     def setup_number_transform(self):
         """Pre-compute coordinate transformation constants"""
         # Adjust number size to be more prominent
@@ -205,94 +141,9 @@ class IshiharaPlateGenerator:
         self.size_weights = [0.002, 0.008, 0.05, 0.20, 0.35, 0.25, 0.11, 0.03]  # Adds to 1.0
         return [s//2 for s in sizes]  # Convert to radii
 
-    def find_edge_points(self):
-        """Find edge points of the number"""
-        edge_points = []
-        for y in range(1, self.bin_num.shape[0] - 1):
-            for x in range(1, self.bin_num.shape[1] - 1):
-                if self.bin_num[y][x]:
-                    # Check if this is an edge pixel by looking at neighbors
-                    is_edge = False
-                    for dy in [-1, 0, 1]:
-                        for dx in [-1, 0, 1]:
-                            if not self.bin_num[y + dy][x + dx]:
-                                is_edge = True
-                                break
-                        if is_edge:
-                            break
-                            
-                    if is_edge:
-                        world_x = self.number_x + (x * self.number_width / self.bin_num.shape[1])
-                        world_y = self.number_y + (y * self.number_height / self.bin_num.shape[0])
-                        edge_points.append((world_x, world_y))
-        return edge_points
 
-    def try_place_circle(self, x, y, radius, spacing=1.0):  # Increased minimum spacing
-        """Check if a circle can be placed at the given position"""
-        if not self.is_inside_number(x, y):
-            return False
-        
-        # Add a strict spacing check
-        buffer = spacing  # Minimum gap between circles
-        
-        for shape in self.space.shapes:
-            if isinstance(shape, pymunk.Circle):
-                dist = math.sqrt((x - shape.body.position.x)**2 + 
-                            (y - shape.body.position.y)**2)
-                # Strict no-overlap check plus minimum gap
-                if dist < (radius + shape.radius + buffer):
-                    return False
-        return True
-
-
-    def create_physics_circle(self, x, y, radius):
-        """Create and add a physics circle with more stability"""
-        body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
-        body.position = (x, y)
-        shape = pymunk.Circle(body, radius)
-        shape.friction = 0.9  # Increased friction
-        shape.elasticity = 0.0  # No bouncing
-        self.space.add(body, shape)
-        return shape
-
-    def get_nesting_positions(self, circle, radius):
-        """Generate positions that would nest against an existing circle"""
-        positions = []
-        pos = circle.body.position
-        for angle in range(0, 360, 45):
-            rad = math.radians(angle)
-            for dist_factor in [1.0, 1.2]:
-                x = pos.x + math.cos(rad) * (radius * 2) * dist_factor
-                y = pos.y + math.sin(rad) * (radius * 2) * dist_factor
-                if self.is_inside_number(x, y):
-                    positions.append((x, y))
-        return positions
-
-    def get_size_weights_for_position(self, x, y, edge_points, radii):
-        """Get appropriate radii and weights based on position"""
-        min_edge_dist = min(math.sqrt((x - ex)**2 + (y - ey)**2) 
-                        for ex, ey in edge_points)
-        
-        if min_edge_dist < 20:
-            available_radii = radii[len(radii)//2:]  # Smaller sizes
-            weights = self.size_weights[len(radii)//2:]
-        else:
-            available_radii = radii
-            weights = self.size_weights.copy()
-        
-        # Normalize weights
-        total = sum(weights)
-        weights = [w/total for w in weights]
-        
-        return available_radii, weights
-
-    def add_circles_to_number(self, target_circles=1000):
-        """Fill number with dense packing while following contours"""
-        circles = []
-        radii = self.get_circle_sizes()
-        spacing = 0.5
-        
-        # Get number bounds for grid creation
+    def find_number_bounds(self):
+        """Calculate the bounds of the number in world coordinates"""
         min_x = float('inf')
         max_x = float('-inf')
         min_y = float('inf')
@@ -308,17 +159,41 @@ class IshiharaPlateGenerator:
                     min_y = min(min_y, world_y)
                     max_y = max(max_y, world_y)
         
-        # Create dense grid of starting positions
-        grid_size = min(radii) * 1.5  # Tighter grid
+        return min_x, max_x, min_y, max_y
+
+    def generate_initial_positions(self, min_x, max_x, min_y, max_y, grid_size):
+        """Generate initial grid of positions with offset rows"""
         positions = []
         for y in np.arange(min_y, max_y, grid_size):
-            row_offset = (grid_size / 2) * ((int(y / grid_size) % 2))  # Offset alternate rows
+            row_offset = (grid_size / 2) * ((int(y / grid_size) % 2))
             for x in np.arange(min_x, max_x, grid_size):
                 if self.is_inside_number(x + row_offset, y):
                     positions.append((x + row_offset, y))
-        
-        # Shuffle positions but prioritize edge positions
-        edge_points = self.find_edge_points()
+        return positions
+    
+
+
+    def find_edge_points(self):
+        """Find points along the edge of the number"""
+        edge_points = []
+        for y in range(1, self.bin_num.shape[0] - 1):
+            for x in range(1, self.bin_num.shape[1] - 1):
+                if self.bin_num[y][x]:
+                    # Check if this is an edge pixel by looking at neighbors
+                    is_edge = False
+                    for dy, dx in [(-1,0), (1,0), (0,-1), (0,1)]:
+                        if not self.bin_num[y + dy][x + dx]:
+                            is_edge = True
+                            break
+                            
+                    if is_edge:
+                        world_x = self.number_x + (x * self.number_width / self.bin_num.shape[1])
+                        world_y = self.number_y + (y * self.number_height / self.bin_num.shape[0])
+                        edge_points.append((world_x, world_y))
+        return edge_points
+
+    def sort_positions_by_edge_proximity(self, positions, edge_points, grid_size):
+        """Sort positions into edge and interior groups"""
         edge_positions = []
         interior_positions = []
         
@@ -332,50 +207,107 @@ class IshiharaPlateGenerator:
                 
         random.shuffle(edge_positions)
         random.shuffle(interior_positions)
-        positions = edge_positions + interior_positions
+        return edge_positions + interior_positions
+
+
+
+    def get_nesting_positions(self, circle, radius):
+        """Generate positions that would nest against an existing circle"""
+        positions = []
+        pos = circle.body.position
+        for angle in range(0, 360, 45):
+            rad = math.radians(angle)
+            for dist_factor in [1.0, 1.2]:
+                x = pos.x + math.cos(rad) * (radius * 2) * dist_factor
+                y = pos.y + math.sin(rad) * (radius * 2) * dist_factor
+                if self.is_inside_number(x, y):
+                    positions.append((x, y))
+        return positions
+    
+
+
+
+    def get_radius_options(self, x, y, edge_points, grid_size):
+        """Get appropriate radii and weights based on position"""
+        min_edge_dist = min(math.sqrt((x - ex)**2 + (y - ey)**2) 
+                        for ex, ey in edge_points)
+        
+        if min_edge_dist < grid_size * 2:
+            available_radii = self.get_circle_sizes()[len(self.size_weights)//2:]
+            weights = self.size_weights[len(self.size_weights)//2:]
+        else:
+            available_radii = self.get_circle_sizes()
+            weights = self.size_weights
+        
+        weights = [w/sum(weights) for w in weights]
+        return available_radii, weights
+
+
+    def add_circles_to_number(self, target_circles=1000):
+        """Fill number with dense packing while following contours"""
+        circles = []
+        spacing = 1.0
+        
+        # Get number bounds
+        min_x, max_x, min_y, max_y = self.find_number_bounds()
+        
+        # Create initial grid of positions
+        grid_size = min(self.get_circle_sizes()) * 1.8
+        positions = self.generate_initial_positions(min_x, max_x, min_y, max_y, grid_size)
+        
+        # Find edge points and sort positions
+        edge_points = self.find_edge_points()
+        positions = self.sort_positions_by_edge_proximity(positions, edge_points, grid_size)
         
         # Place circles
         while positions and len(circles) < target_circles:
             x, y = positions.pop(0)
             
-            # Determine appropriate sizes based on position
-            min_edge_dist = min(math.sqrt((x - ex)**2 + (y - ey)**2) 
-                            for ex, ey in edge_points)
+            # Get appropriate radii for this position
+            available_radii, weights = self.get_radius_options(x, y, edge_points, grid_size)
             
-            if min_edge_dist < grid_size * 2:
-                # Near edges - prefer smaller circles
-                available_radii = radii[len(radii)//2:]
-                weights = self.size_weights[len(radii)//2:]
-            else:
-                # Interior - use full range with normal distribution
-                available_radii = radii
-                weights = self.size_weights
-            
-            # Normalize weights
-            weights = [w/sum(weights) for w in weights]
-            
-            # Try placing circles
+            # Try to place circle
             for radius in random.choices(available_radii, weights=weights, k=len(available_radii)):
-                if self.try_place_circle(x, y, radius):
+                if self.try_place_circle(x, y, radius, spacing):
+                    # Create and add circle
                     shape = self.create_physics_circle(x, y, radius)
                     circles.append((shape, radius))
                     
-                    # Add new positions around successful placement
-                    for angle in range(0, 360, 30):  # More angles for denser packing
-                        rad = math.radians(angle)
-                        for dist_factor in [0.9, 1.1]:  # Tighter spacing factors
-                            new_x = x + math.cos(rad) * (radius * 2) * dist_factor
-                            new_y = y + math.sin(rad) * (radius * 2) * dist_factor
-                            if self.is_inside_number(new_x, new_y):
-                                positions.append((new_x, new_y))
+                    # Generate new positions around this circle
+                    new_positions = self.generate_new_positions(x, y, radius, spacing)
+                    positions.extend(new_positions)
                     break
         
-        # Final settling
-        for _ in range(30):
+        # Minimal settling
+        for _ in range(10):
             self.space.step(1/60.0)
         
         return circles
-            
+
+    # Supporting methods that remain the same
+    def try_place_circle(self, x, y, radius, spacing=1.0):
+        """Check if a circle can be placed at the given position"""
+        if not self.is_inside_number(x, y):
+            return False
+        
+        for shape in self.space.shapes:
+            if isinstance(shape, pymunk.Circle):
+                dist = math.sqrt((x - shape.body.position.x)**2 + 
+                            (y - shape.body.position.y)**2)
+                if dist < (radius + shape.radius + spacing):
+                    return False
+        return True
+    
+
+    def create_physics_circle(self, x, y, radius):
+        """Create and add a physics circle with more stability"""
+        body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
+        body.position = (x, y)
+        shape = pymunk.Circle(body, radius)
+        shape.friction = 0.9
+        shape.elasticity = 0.0
+        self.space.add(body, shape)
+        return shape
 
 
 
@@ -449,33 +381,8 @@ class IshiharaPlateGenerator:
         return body
 
 
-  
 
-    def check_coverage(self, circles):
-        """Improved coverage checking with grid-based sampling"""
-        grid_resolution = 50
-        coverage_points = 0
-        total_points = 0
-        
-        # Create a grid of sample points
-        for y in range(self.bin_num.shape[0]):
-            for x in range(self.bin_num.shape[1]):
-                if self.bin_num[y][x]:
-                    total_points += 1
-                    
-                    # Convert grid position to world coordinates
-                    world_x = self.number_x + (x + 0.5) * (self.number_width / self.bin_num.shape[1])
-                    world_y = self.number_y + (y + 0.5) * (self.number_height / self.bin_num.shape[0])
-                    
-                    # Check if point is covered by any circle
-                    for circle, radius in circles:
-                        pos = circle.body.position
-                        dist_sq = (world_x - pos.x)**2 + (world_y - pos.y)**2
-                        if dist_sq <= (radius * 0.95)**2:  # 95% of radius to ensure overlap
-                            coverage_points += 1
-                            break
-        
-        return coverage_points / total_points if total_points > 0 else 0
+
 
     def draw_circle_with_gradient(self, draw, pos, radius, color):
         """Draw a non-overlapping circle with white ring"""
@@ -539,58 +446,6 @@ class IshiharaPlateGenerator:
             # Select color randomly for each circle
             color = random.choice(base_colors)
             self.draw_circle_with_gradient(circles_draw, circle.body.position, radius, color)
-
-
-    def color_difference(self, color1, color2):
-        """Calculate approximate color difference in RGB space"""
-        # Convert hex to RGB
-        r1 = int(color1[1:3], 16)
-        g1 = int(color1[3:5], 16)
-        b1 = int(color1[5:7], 16)
-        
-        r2 = int(color2[1:3], 16)
-        g2 = int(color2[3:5], 16)
-        b2 = int(color2[5:7], 16)
-        
-        # Calculate Euclidean distance in RGB space
-        return math.sqrt((r1 - r2)**2 + (g1 - g2)**2 + (b1 - b2)**2)
-
-    def get_next_background_color(self, last_color=None):
-        """Get next background color ensuring variety"""
-        if last_color is not None:
-            # Try to pick a color different enough from the last one
-            attempts = 0
-            while attempts < len(self.background_colors):
-                color = self.background_colors[self.current_bg_color_index]
-                if self.color_difference(color, last_color) > 30:  # threshold for difference
-                    break
-                self.current_bg_color_index = (self.current_bg_color_index + 1) % len(self.background_colors)
-                attempts += 1
-        else:
-            color = self.background_colors[self.current_bg_color_index]
-        
-        self.current_bg_color_index = (self.current_bg_color_index + 1) % len(self.background_colors)
-        return color
-
-    def get_next_figure_color(self, last_color=None):
-        """Get next figure color with more noticeable variations"""
-        colors = [
-            '#FF5733',  # Bright orange-red
-            '#E84D1C',  # Deeper orange
-            '#FF704D',  # Lighter orange-red
-            '#D44124',  # Darker orange-red
-            '#FF8566'   # Light coral
-        ]
-        
-        if last_color is not None:
-            # Ensure some variation by avoiding recent colors
-            available_colors = [c for c in colors if c != last_color]
-            color = random.choice(available_colors)
-        else:
-            color = random.choice(colors)
-        
-        self.current_fg_color_index = (self.current_fg_color_index + 1) % len(colors)
-        return color
 
 
 
