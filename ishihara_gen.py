@@ -128,7 +128,7 @@ class IshiharaPlateGenerator:
         """Define circle sizes matching sample image distribution"""
         # Sizes in pixels diameter - more gradual progression
         sizes = [
-            30,  # Largest - extremely rare
+            35,  # Largest - extremely rare
             26,  # Very large - very rare
             22,  # Large-medium - uncommon
             18,  # Medium - very common
