@@ -126,17 +126,17 @@ class IshiharaPlateGenerator:
 
     def get_circle_sizes(self):
         """Define circle sizes matching sample image distribution"""
-        # Focused on medium-large sizes in pixels diameter
+        # Balanced size range in pixels diameter
         sizes = [
-            48,  # Extra large - very rare
-            40,  # Large - uncommon
-            34,  # Medium-large - most common
-            28,  # Medium - common
-            22   # Medium-small - for gaps
+            44,  # Extra large - rare
+            36,  # Large - uncommon
+            30,  # Medium-large - common
+            24,  # Medium - most common
+            18   # Small - for filling gaps
         ]
         
-        # Weights heavily favor medium-large circles
-        self.size_weights = [0.05, 0.15, 0.45, 0.25, 0.10]  # Adds to 1.0
+        # More balanced weights with preference for medium sizes
+        self.size_weights = [0.08, 0.20, 0.30, 0.30, 0.12]  # Adds to 1.0
         
         # Convert to radii
         radii = [s//2 for s in sizes]
@@ -264,11 +264,11 @@ class IshiharaPlateGenerator:
                     new_positions.append((new_x, new_y))
         return new_positions
 
-    def add_circles_to_number(self, target_circles=150):  # Reduced from 200
-        """Fill number with predominantly medium-large circles"""
+    def add_circles_to_number(self, target_circles=175):  # Adjusted target
+        """Fill number with balanced circle distribution"""
         circles = []
         spacing = 1.1
-        
+
         # Get circle sizes first
         radii = self.get_circle_sizes()
         grid_size = min(radii) * 1.5
