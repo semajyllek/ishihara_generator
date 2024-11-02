@@ -187,11 +187,12 @@ class IshiharaPlateGenerator:
         self.number_x = self.center_x - self.number_width/2
         self.number_y = self.center_y - self.number_height/2
 
+
     def get_circle_sizes(self):
         """Define circle sizes matching sample image distribution"""
-        # Sizes in pixels diameter - more gradual progression with natural steps
+        # Sizes in pixels diameter - more gradual progression
         sizes = [
-            30,  # Largest - extremely rare (reduced from 32)
+            30,  # Largest - extremely rare
             26,  # Very large - very rare
             22,  # Large-medium - uncommon
             18,  # Medium - very common
@@ -200,18 +201,12 @@ class IshiharaPlateGenerator:
             10,  # Very small - common
             8    # Tiny - for filling gaps
         ]
-        # Adjusted weights to closer match sample
+        # Weights based on sample image analysis
         self.size_weights = [0.002, 0.008, 0.05, 0.20, 0.35, 0.25, 0.11, 0.03]  # Adds to 1.0
         return [s//2 for s in sizes]  # Convert to radii
-    
 
-    def add_circles_to_number(self, target_circles=1000):
-        """Fill number with improved edge and contour following"""
-        circles = []
-        radii = self.get_circle_sizes()
-        spacing = 0.5
-        
-        # First, get all edge points of the number
+    def find_edge_points(self):
+        """Find edge points of the number"""
         edge_points = []
         for y in range(1, self.bin_num.shape[0] - 1):
             for x in range(1, self.bin_num.shape[1] - 1):
@@ -229,84 +224,112 @@ class IshiharaPlateGenerator:
                     if is_edge:
                         world_x = self.number_x + (x * self.number_width / self.bin_num.shape[1])
                         world_y = self.number_y + (y * self.number_height / self.bin_num.shape[0])
-                        # Store edge angle for better circle placement
                         edge_points.append((world_x, world_y))
+        return edge_points
 
-        def try_place_circle(x, y, radius):
-            if not self.is_inside_number(x, y):
-                return False
-                
-            for shape in self.space.shapes:
-                if isinstance(shape, pymunk.Circle):
-                    dist = math.sqrt((x - shape.body.position.x)**2 + 
-                                (y - shape.body.position.y)**2)
-                    if dist < (radius + shape.radius + spacing):
-                        return False
-            return True
+    def try_place_circle(self, x, y, radius, spacing=0.5):
+        """Check if a circle can be placed at the given position"""
+        if not self.is_inside_number(x, y):
+            return False
+            
+        for shape in self.space.shapes:
+            if isinstance(shape, pymunk.Circle):
+                dist = math.sqrt((x - shape.body.position.x)**2 + 
+                            (y - shape.body.position.y)**2)
+                if dist < (radius + shape.radius + spacing):
+                    return False
+        return True
 
+    def create_physics_circle(self, x, y, radius):
+        """Create and add a physics circle"""
+        body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
+        body.position = (x, y)
+        shape = pymunk.Circle(body, radius)
+        shape.friction = 0.7
+        shape.elasticity = 0.1
+        self.space.add(body, shape)
+        return shape
+
+    def get_nesting_positions(self, circle, radius):
+        """Generate positions that would nest against an existing circle"""
+        positions = []
+        pos = circle.body.position
+        for angle in range(0, 360, 45):
+            rad = math.radians(angle)
+            for dist_factor in [1.0, 1.2]:
+                x = pos.x + math.cos(rad) * (radius * 2) * dist_factor
+                y = pos.y + math.sin(rad) * (radius * 2) * dist_factor
+                if self.is_inside_number(x, y):
+                    positions.append((x, y))
+        return positions
+
+    def get_size_weights_for_position(self, x, y, edge_points, radii):
+        """Get appropriate radii and weights based on position"""
+        min_edge_dist = min(math.sqrt((x - ex)**2 + (y - ey)**2) 
+                        for ex, ey in edge_points)
+        
+        if min_edge_dist < 20:
+            available_radii = radii[len(radii)//2:]  # Smaller sizes
+            weights = self.size_weights[len(radii)//2:]
+        else:
+            available_radii = radii
+            weights = self.size_weights.copy()
+        
+        # Normalize weights
+        total = sum(weights)
+        weights = [w/total for w in weights]
+        
+        return available_radii, weights
+
+    def add_circles_to_number(self, target_circles=1000):
+        """Fill number with improved edge and contour following"""
+        circles = []
+        radii = self.get_circle_sizes()
+        edge_points = self.find_edge_points()
+        
         # First pass: Place circles along edges
         for edge_x, edge_y in edge_points:
             # Try smaller circles first for edge definition
             for radius in reversed(radii[:4]):  # Use smaller subset for edges
-                if try_place_circle(edge_x, edge_y, radius):
-                    body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
-                    body.position = (edge_x, edge_y)
-                    shape = pymunk.Circle(body, radius)
-                    shape.friction = 0.7
-                    shape.elasticity = 0.1
-                    self.space.add(body, shape)
+                if self.try_place_circle(edge_x, edge_y, radius):
+                    shape = self.create_physics_circle(edge_x, edge_y, radius)
                     circles.append((shape, radius))
                     break
 
-        # Second pass: Fill interior using existing circles as guides
+        # Generate initial positions for interior filling
         positions_to_try = []
         for circle, radius in circles:
-            # Generate positions that would nest against this circle
-            pos = circle.body.position
-            for angle in range(0, 360, 30):
-                rad = math.radians(angle)
-                # Try multiple distances to create natural nesting
-                for dist_factor in [1.0, 1.2, 1.4]:
-                    x = pos.x + math.cos(rad) * (radius * 2) * dist_factor
-                    y = pos.y + math.sin(rad) * (radius * 2) * dist_factor
-                    if self.is_inside_number(x, y):
-                        positions_to_try.append((x, y))
-
+            positions_to_try.extend(self.get_nesting_positions(circle, radius))
         random.shuffle(positions_to_try)
         
         # Fill interior
         while positions_to_try and len(circles) < target_circles:
             x, y = positions_to_try.pop(0)
             
-            # Choose radius based on position (prefer smaller near edges)
-            min_edge_dist = min(math.sqrt((x - ex)**2 + (y - ey)**2) 
-                            for ex, ey in edge_points)
-            if min_edge_dist < 20:
-                available_radii = radii[len(radii)//2:]  # Smaller sizes
-            else:
-                available_radii = radii
-
-            for radius in random.choices(available_radii, weights=self.size_weights, k=len(available_radii)):
-                if try_place_circle(x, y, radius):
-                    body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
-                    body.position = (x, y)
-                    shape = pymunk.Circle(body, radius)
-                    shape.friction = 0.7
-                    shape.elasticity = 0.1
-                    self.space.add(body, shape)
+            # Get appropriate radii and weights for this position
+            available_radii, weights = self.get_size_weights_for_position(x, y, edge_points, radii)
+            
+            # Try to place circle
+            for radius in random.choices(available_radii, weights=weights, k=len(available_radii)):
+                if self.try_place_circle(x, y, radius):
+                    shape = self.create_physics_circle(x, y, radius)
                     circles.append((shape, radius))
                     
-                    # Add new positions around successful placement
-                    for angle in range(0, 360, 45):
-                        rad = math.radians(angle)
-                        for dist_factor in [1.0, 1.2]:
-                            new_x = x + math.cos(rad) * (radius * 2) * dist_factor
-                            new_y = y + math.sin(rad) * (radius * 2) * dist_factor
-                            if self.is_inside_number(new_x, new_y):
-                                positions_to_try.append((new_x, new_y))
+                    # Add new positions around this circle
+                    positions_to_try.extend(self.get_nesting_positions(shape, radius))
                     break
-
+        
+        # Let physics settle
+        for _ in range(60):
+            self.space.step(1/60.0)
+        
         return circles
+        
+
+
+
+
+
 
     def run_physics_simulation(self):
         """Number filling only"""
