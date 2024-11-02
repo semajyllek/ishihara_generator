@@ -281,7 +281,7 @@ class IshiharaPlateGenerator:
         min_x, max_x, min_y, max_y = self.find_number_bounds()
         
         # Create initial grid of positions with larger spacing
-        grid_size = min(self.get_circle_sizes()) * 2.2  # Increased from 1.8
+        edge_points = self.find_edge_points()
         positions = self.generate_initial_positions(min_x, max_x, min_y, max_y, grid_size)
         
         # Place circles
