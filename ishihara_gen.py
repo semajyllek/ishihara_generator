@@ -186,7 +186,7 @@ class IshiharaPlateGenerator:
         # Center the number
         self.number_x = self.center_x - self.number_width/2
         self.number_y = self.center_y - self.number_height/2
-        
+
     def get_circle_sizes(self):
         """Define circle sizes matching sample image distribution"""
         # Sizes in pixels diameter - more gradual progression with natural steps
@@ -471,22 +471,31 @@ class IshiharaPlateGenerator:
         self.current_bg_color_index = (self.current_bg_color_index + 1) % len(self.background_colors)
         return color
 
+
     def get_next_figure_color(self, last_color=None):
-        """Get next figure color ensuring variety"""
-        if last_color is not None:
-            # Try to pick a color different enough from the last one
-            attempts = 0
-            while attempts < len(self.figure_colors):
-                color = self.figure_colors[self.current_fg_color_index]
-                if self.color_difference(color, last_color) > 30:  # threshold for difference
-                    break
-                self.current_fg_color_index = (self.current_fg_color_index + 1) % len(self.figure_colors)
-                attempts += 1
-        else:
-            color = self.figure_colors[self.current_fg_color_index]
+        """Get next figure color with subtle variations like the sample"""
+        # Base orange/reddish color from the sample with slight variations
+        base_hue = 20  # Orange-red base
+        colors = [
+            # Slightly darker and more red
+            '#E85D35',  # Base orange-red
+            '#E56845',  # Slightly lighter
+            '#EA6B3A',  # Touch warmer
+            '#E75525',  # Touch darker
+            '#EC7242',  # Slightly brighter
+        ]
         
-        self.current_fg_color_index = (self.current_fg_color_index + 1) % len(self.figure_colors)
+        if last_color is not None:
+            # Avoid picking the same color twice in a row
+            available_colors = [c for c in colors if c != last_color]
+            color = random.choice(available_colors)
+        else:
+            color = random.choice(colors)
+        
+        self.current_fg_color_index = (self.current_fg_color_index + 1) % len(colors)
         return color
+
+
 
     def draw_bold_border(self, draw):
         """Draw the bold black border on top of everything"""
