@@ -227,26 +227,31 @@ class IshiharaPlateGenerator:
                         edge_points.append((world_x, world_y))
         return edge_points
 
-    def try_place_circle(self, x, y, radius, spacing=0.5):
+    def try_place_circle(self, x, y, radius, spacing=1.0):  # Increased minimum spacing
         """Check if a circle can be placed at the given position"""
         if not self.is_inside_number(x, y):
             return False
-            
+        
+        # Add a strict spacing check
+        buffer = spacing  # Minimum gap between circles
+        
         for shape in self.space.shapes:
             if isinstance(shape, pymunk.Circle):
                 dist = math.sqrt((x - shape.body.position.x)**2 + 
                             (y - shape.body.position.y)**2)
-                if dist < (radius + shape.radius + spacing):
+                # Strict no-overlap check plus minimum gap
+                if dist < (radius + shape.radius + buffer):
                     return False
         return True
 
+
     def create_physics_circle(self, x, y, radius):
-        """Create and add a physics circle"""
+        """Create and add a physics circle with more stability"""
         body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
         body.position = (x, y)
         shape = pymunk.Circle(body, radius)
-        shape.friction = 0.7
-        shape.elasticity = 0.1
+        shape.friction = 0.9  # Increased friction
+        shape.elasticity = 0.0  # No bouncing
         self.space.add(body, shape)
         return shape
 
