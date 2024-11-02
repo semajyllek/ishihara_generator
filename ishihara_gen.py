@@ -287,7 +287,7 @@ class IshiharaPlateGenerator:
         return circles
 
     # Supporting methods that remain the same
-    def try_place_circle(self, x, y, radius, spacing=1.0):
+    def try_place_circle(self, x, y, radius, spacing=1.2):
         """Check if a circle can be placed at the given position"""
         if not self.is_inside_number(x, y):
             return False
