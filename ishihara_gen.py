@@ -238,39 +238,32 @@ class IshiharaPlateGenerator:
         weights = [w/sum(weights) for w in weights]
         return available_radii, weights
 
-    def try_place_circle(self, x, y, radius, spacing=2.5):  # Increased from 2.0
-        """Check if a circle can be placed at the given position with strict spacing"""
+    def try_place_circle(self, x, y, radius, spacing=1.1):  # Reduced from 2.5
+        """Check if a circle can be placed at the given position with minimal spacing"""
         if not self.is_inside_number(x, y):
             return False
         
-        # Check if circle would be too close to the edge of the number region
-        min_edge_dist = self.main_circle_radius - math.sqrt((x - self.center_x)**2 + (y - self.center_y)**2)
-        if min_edge_dist < spacing * 2:  # Double spacing near edges
-            return False
-        
-        # Very strict overlap check with extra buffer
-        buffer = spacing * 1.2  # Add 20% extra buffer
-        
+        # Check for overlap with existing circles
         for shape in self.space.shapes:
             if isinstance(shape, pymunk.Circle):
                 dist = math.sqrt((x - shape.body.position.x)**2 + 
                             (y - shape.body.position.y)**2)
-                required_space = (radius + shape.radius + buffer)
+                required_space = (radius + shape.radius + spacing)
                 if dist < required_space:
                     return False
         return True
 
     def generate_new_positions(self, x, y, radius, spacing):
-        """Generate new candidate positions with increased spacing"""
+        """Generate new candidate positions with tighter spacing"""
         new_positions = []
-        angles = list(range(0, 360, 20))  # More angles for better coverage
-        random.shuffle(angles)  # Randomize angle selection
+        angles = list(range(0, 360, 15))  # More angles for better coverage
+        random.shuffle(angles)
         
         for angle in angles:
             rad = math.radians(angle)
-            for dist_factor in [2.0, 2.2, 2.4]:  # Increased spacing factors
-                new_x = x + math.cos(rad) * (radius * 2 + spacing * 2) * dist_factor
-                new_y = y + math.sin(rad) * (radius * 2 + spacing * 2) * dist_factor
+            for dist_factor in [1.1, 1.2, 1.3]:  # Tighter spacing factors
+                new_x = x + math.cos(rad) * (radius * 2 + spacing) * dist_factor
+                new_y = y + math.sin(rad) * (radius * 2 + spacing) * dist_factor
                 if self.is_inside_number(new_x, new_y):
                     new_positions.append((new_x, new_y))
         return new_positions
@@ -278,11 +271,11 @@ class IshiharaPlateGenerator:
     def add_circles_to_number(self, target_circles=1000):
         """Fill number with dense packing while following contours"""
         circles = []
-        spacing = 2.5  # Increased base spacing
+        spacing = 1.1  # Reduced spacing
         
         # Get circle sizes first
         radii = self.get_circle_sizes()
-        grid_size = min(radii) * 2.5  # Increased grid spacing
+        grid_size = min(radii) * 1.5  # Reduced grid spacing
         
         # Get number bounds
         min_x, max_x, min_y, max_y = self.find_number_bounds()
@@ -290,7 +283,7 @@ class IshiharaPlateGenerator:
         # Find edge points
         edge_points = self.find_edge_points()
         
-        # Create initial grid of positions with larger spacing
+        # Create initial grid of positions with tighter spacing
         positions = self.generate_initial_positions(min_x, max_x, min_y, max_y, grid_size)
         
         # Sort positions by edge proximity
@@ -309,14 +302,6 @@ class IshiharaPlateGenerator:
             # Try to place circle
             success = False
             for radius in random.choices(available_radii, weights=weights, k=len(available_radii)):
-                # Double check for nearby circles with extra strict spacing
-                nearby_circles = [c for c, r in circles if 
-                                math.sqrt((x - c.body.position.x)**2 + 
-                                        (y - c.body.position.y)**2) < (radius + r) * 3]
-                
-                if nearby_circles:
-                    continue
-                    
                 if self.try_place_circle(x, y, radius, spacing):
                     shape = self.create_physics_circle(x, y, radius)
                     circles.append((shape, radius))
@@ -332,7 +317,6 @@ class IshiharaPlateGenerator:
             if len(circles) % 10 == 0:
                 random.shuffle(positions)
         
-        # No physics settling - maintain exact positions
         return circles
 
     def create_physics_circle(self, x, y, radius):
