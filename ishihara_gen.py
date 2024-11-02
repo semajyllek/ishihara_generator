@@ -270,7 +270,6 @@ class IshiharaPlateGenerator:
                 if self.is_inside_number(new_x, new_y):
                     new_positions.append((new_x, new_y))
         return new_positions
-        
 
 
     def add_circles_to_number(self, target_circles=1000):
