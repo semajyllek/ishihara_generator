@@ -208,22 +208,8 @@ class IshiharaPlateGenerator:
         random.shuffle(edge_positions)
         random.shuffle(interior_positions)
         return edge_positions + interior_positions
-
-
-
-    def get_nesting_positions(self, circle, radius):
-        """Generate positions that would nest against an existing circle"""
-        positions = []
-        pos = circle.body.position
-        for angle in range(0, 360, 45):
-            rad = math.radians(angle)
-            for dist_factor in [1.0, 1.2]:
-                x = pos.x + math.cos(rad) * (radius * 2) * dist_factor
-                y = pos.y + math.sin(rad) * (radius * 2) * dist_factor
-                if self.is_inside_number(x, y):
-                    positions.append((x, y))
-        return positions
     
+
 
 
 
@@ -241,6 +227,21 @@ class IshiharaPlateGenerator:
         
         weights = [w/sum(weights) for w in weights]
         return available_radii, weights
+
+
+
+    def generate_new_positions(self, x, y, radius, spacing):
+        """Generate new candidate positions around a placed circle"""
+        new_positions = []
+        for angle in range(0, 360, 30):
+            rad = math.radians(angle)
+            for dist_factor in [1.1, 1.3]:
+                new_x = x + math.cos(rad) * (radius * 2 + spacing) * dist_factor
+                new_y = y + math.sin(rad) * (radius * 2 + spacing) * dist_factor
+                if self.is_inside_number(new_x, new_y):
+                    new_positions.append((new_x, new_y))
+        return new_positions
+    
 
 
     def add_circles_to_number(self, target_circles=1000):
