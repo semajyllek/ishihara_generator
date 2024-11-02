@@ -138,7 +138,7 @@ class IshiharaPlateGenerator:
             8    # Tiny - for filling gaps
         ]
         # Weights based on sample image analysis
-        self.size_weights = [0.01, 0.008, 0.05, 0.17, 0.26, 0.2, 0.1, 0.03]  # Adds to 1.0
+        self.size_weights = [0.01, 0.012, 0.05, 0.17, 0.26, 0.18, 0.08, 0.03]  # Adds to 1.0
         return [s//2 for s in sizes]  # Convert to radii
 
 
