@@ -124,28 +124,24 @@ class IshiharaPlateGenerator:
         self.number_x = self.center_x - self.number_width/2
         self.number_y = self.center_y - self.number_height/2
 
-
     def get_circle_sizes(self):
         """Define circle sizes matching sample image distribution"""
-        # Sizes in pixels diameter - more gradual progression
+        # Larger sizes in pixels diameter
         sizes = [
-            35,  # Largest - extremely rare
-            26,  # Very large - very rare
-            22,  # Large-medium - uncommon
-            15,  # Medium-small - most common
-            12,  # Small - very common
-            10,  # Very small - common
-            8    # Tiny - for filling gaps
+            48,  # Extra large - rare
+            40,  # Large - uncommon
+            32,  # Medium-large - common
+            26,  # Medium - common
+            20   # Small - for filling gaps
         ]
         
-        # Set weights as class attribute
-        self.size_weights = [0.10, 0.012, 0.08, 0.26, 0.18, 0.08, 0.06]  # Adds to 1.0
+        # Adjust weights to prefer larger sizes
+        self.size_weights = [0.15, 0.25, 0.30, 0.20, 0.10]  # Adds to 1.0
         
         # Convert to radii
         radii = [s//2 for s in sizes]
         print(f"Generated circle radii: {radii}")  # Debug print
         return radii
-
 
     def find_number_bounds(self):
         """Calculate the bounds of the number in world coordinates"""
@@ -268,14 +264,14 @@ class IshiharaPlateGenerator:
                     new_positions.append((new_x, new_y))
         return new_positions
 
-    def add_circles_to_number(self, target_circles=1000):
-        """Fill number with dense packing while following contours"""
+    def add_circles_to_number(self, target_circles=200):  # Reduced from 1000
+        """Fill number with larger circles"""
         circles = []
-        spacing = 1.1  # Reduced spacing
+        spacing = 1.1
         
         # Get circle sizes first
         radii = self.get_circle_sizes()
-        grid_size = min(radii) * 1.5  # Reduced grid spacing
+        grid_size = min(radii) * 1.5
         
         # Get number bounds
         min_x, max_x, min_y, max_y = self.find_number_bounds()
