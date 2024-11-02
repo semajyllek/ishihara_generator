@@ -239,13 +239,12 @@ class IshiharaPlateGenerator:
         return available_radii, weights
 
 
-
     def generate_new_positions(self, x, y, radius, spacing):
         """Generate new candidate positions around a placed circle"""
         new_positions = []
         for angle in range(0, 360, 30):
             rad = math.radians(angle)
-            for dist_factor in [1.2, 1.4]:
+            for dist_factor in [1.5, 1.7]:  # Increased from [1.2, 1.4]
                 new_x = x + math.cos(rad) * (radius * 2 + spacing) * dist_factor
                 new_y = y + math.sin(rad) * (radius * 2 + spacing) * dist_factor
                 if self.is_inside_number(new_x, new_y):
@@ -257,7 +256,7 @@ class IshiharaPlateGenerator:
     def add_circles_to_number(self, target_circles=1000):
         """Fill number with dense packing while following contours"""
         circles = []
-        spacing = 1.0
+        spacing = 1.2
         
         # Get number bounds
         min_x, max_x, min_y, max_y = self.find_number_bounds()
@@ -295,10 +294,15 @@ class IshiharaPlateGenerator:
         
         return circles
 
-    # Supporting methods that remain the same
-    def try_place_circle(self, x, y, radius, spacing=1.2):
+    
+    def try_place_circle(self, x, y, radius, spacing=1.5):  # Increased from 1.2
         """Check if a circle can be placed at the given position"""
         if not self.is_inside_number(x, y):
+            return False
+        
+        # Add extra buffer near edges
+        min_edge_dist = self.main_circle_radius - math.sqrt((x - self.center_x)**2 + (y - self.center_y)**2)
+        if min_edge_dist < spacing:
             return False
         
         for shape in self.space.shapes:
