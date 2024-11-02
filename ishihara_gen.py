@@ -121,93 +121,7 @@ class IshiharaPlateGenerator:
             self.center_y + self.main_circle_radius
         ], fill=255)
 
-    def get_circle_sizes(self):
-        """Extended range of circle sizes with even smaller options"""
-        # Added more small sizes for ultra-tight packing
-        sizes = [48, 40, 32, 28, 24, 20, 16, 12, 10, 8, 6]  # pixels diameter
-        return [s//2 for s in sizes]  # Convert to radii
-
-
     
-
-    def add_circles_to_number(self, target_circles=100):
-        """Add circles within the number space using physics"""
-        circles = []
-        radii = sorted(self.small_circle_radii, reverse=True)
-        
-        # Calculate number bounds
-        min_x = float('inf')
-        max_x = float('-inf')
-        min_y = float('inf')
-        max_y = float('-inf')
-        
-        for y in range(self.bin_num.shape[0]):
-            for x in range(self.bin_num.shape[1]):
-                if self.bin_num[y][x]:
-                    world_x = self.number_x + (x * self.number_width / self.bin_num.shape[1])
-                    world_y = self.number_y + (y * self.number_height / self.bin_num.shape[0])
-                    min_x = min(min_x, world_x)
-                    max_x = max(max_x, world_x)
-                    min_y = min(min_y, world_y)
-                    max_y = max(max_y, world_y)
-        
-        def is_inside_number(x, y):
-            grid_x = int((x - self.number_x) / self.number_width * self.bin_num.shape[1])
-            grid_y = int((y - self.number_y) / self.number_height * self.bin_num.shape[0])
-            return (0 <= grid_x < self.bin_num.shape[1] and 
-                    0 <= grid_y < self.bin_num.shape[0] and 
-                    self.bin_num[grid_y][grid_x])
-        
-        placed_circles = 0
-        size_distribution = {r: 0 for r in radii}
-        target_per_size = target_circles / len(radii)
-        
-        while placed_circles < target_circles:
-            # Choose radius ensuring even distribution
-            available_radii = [r for r in radii if size_distribution[r] < target_per_size * 1.2]
-            if not available_radii:
-                available_radii = radii
-            
-            radius = random.choice(available_radii)
-            
-            # Try multiple positions for this radius
-            for _ in range(50):
-                x = random.uniform(min_x + radius, max_x - radius)
-                y = random.uniform(min_y + radius, max_y - radius)
-                
-                if is_inside_number(x, y):
-                    # Check overlap with existing circles
-                    overlaps = False
-                    for shape in self.space.shapes:
-                        if isinstance(shape, pymunk.Circle):
-                            dist = math.sqrt((x - shape.body.position.x)**2 + 
-                                        (y - shape.body.position.y)**2)
-                            if dist < (radius + shape.radius + 1):
-                                overlaps = True
-                                break
-                    
-                    if not overlaps:
-                        body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
-                        body.position = (x, y)
-                        shape = pymunk.Circle(body, radius)
-                        shape.friction = 0.7
-                        shape.elasticity = 0.1
-                        self.space.add(body, shape)
-                        circles.append((shape, radius))
-                        placed_circles += 1
-                        size_distribution[radius] += 1
-                        
-                        # Run mini physics simulation to settle
-                        for _ in range(20):
-                            self.space.step(1/60.0)
-                        break
-            
-            # If we're stuck, relax constraints
-            if placed_circles == 0 or (placed_circles < target_circles and len(circles) == placed_circles):
-                target_per_size *= 1.1
-        
-        return circles
-
     def fill_background(self, existing_circles):
         """Fill the background using physics simulation"""
         circles = []
@@ -273,111 +187,105 @@ class IshiharaPlateGenerator:
         self.number_x = self.center_x - self.number_width/2
         self.number_y = self.center_y - self.number_height/2
 
+    def get_circle_sizes(self):
+        """Define 5 circle sizes based on the sample image distribution"""
+        # Sizes in pixels diameter, weighted by frequency in sample
+        sizes = [
+            40 * 2,  # Extra large - rare
+            32 * 2,  # Large - occasional
+            24 * 2,  # Medium - common
+            16 * 2,  # Small - very common
+            12 * 2,  # Extra small - very common
+        ]
+        # Weights determine how often each size is chosen
+        self.size_weights = [0.1, 0.15, 0.25, 0.25, 0.25]  # Adds to 1.0
+        return [s//2 for s in sizes]  # Convert to radii
+
     def add_circles_to_number(self, target_circles=300):
-        """Fill number using gravity-based pouring simulation"""
+        """Fill number using golden spiral from center"""
         circles = []
-        radii = sorted(self.small_circle_radii, reverse=True)
+        radii = self.get_circle_sizes()
         
-        # Calculate number bounds
-        min_x = float('inf')
-        max_x = float('-inf')
-        min_y = float('inf')
-        max_y = float('-inf')
+        # Find center of number region
+        number_center_x = self.number_x + self.number_width/2
+        number_center_y = self.number_y + self.number_height/2
         
-        for y in range(self.bin_num.shape[0]):
-            for x in range(self.bin_num.shape[1]):
-                if self.bin_num[y][x]:
-                    world_x = self.number_x + (x * self.number_width / self.bin_num.shape[1])
-                    world_y = self.number_y + (y * self.number_height / self.bin_num.shape[0])
-                    min_x = min(min_x, world_x)
-                    max_x = max(max_x, world_x)
-                    min_y = min(min_y, world_y)
-                    max_y = max(max_y, world_y)
+        # Golden angle in radians
+        golden_angle = math.pi * (3 - math.sqrt(5))
         
-        # Keep track of size distribution
-        size_distribution = {r: 0 for r in radii}
-        target_per_size = target_circles / len(radii)
-        
-        # Drop circles from above the number area
-        drop_height = min_y - 50  # Start above the number
         placed_circles = 0
         attempts = 0
-        max_attempts = target_circles * 3
+        max_attempts = target_circles * 5
+        spacing = 1  # Minimum spacing between circles
         
         while placed_circles < target_circles and attempts < max_attempts:
-            # Choose radius ensuring even distribution
-            available_radii = [r for r in radii if size_distribution[r] < target_per_size * 1.2]
-            if not available_radii:
-                available_radii = radii
-            radius = random.choice(available_radii)
+            # Choose radius based on weighted distribution
+            radius = random.choices(radii, weights=self.size_weights, k=1)[0]
             
-            # Random x position within number width
-            x = random.uniform(min_x + radius, max_x - radius)
+            # Calculate position using golden spiral
+            # Distance increases with each attempt but resets periodically
+            distance = math.sqrt(attempts % 100) * (radius * 2)
+            angle = attempts * golden_angle
             
-            # Create circle
-            body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
-            body.position = (x, drop_height)
+            # Generate position
+            x = number_center_x + distance * math.cos(angle)
+            y = number_center_y + distance * math.sin(angle)
             
-            # Add some random initial velocity
-            body.velocity = (random.uniform(-10, 10), 0)
+            # Check if position is inside number
+            if not self.is_inside_number(x, y):
+                attempts += 1
+                continue
             
-            shape = pymunk.Circle(body, radius)
-            shape.friction = 0.7
-            shape.elasticity = 0.3  # Slightly bouncy
-            
-            # Only add if it doesn't overlap with existing circles
+            # Check overlap with existing circles
             overlaps = False
-            for existing_shape in self.space.shapes:
-                if isinstance(existing_shape, pymunk.Circle):
-                    dist = math.sqrt((x - existing_shape.body.position.x)**2 + 
-                                (drop_height - existing_shape.body.position.y)**2)
-                    if dist < (radius + existing_shape.radius + 1):
+            for shape in self.space.shapes:
+                if isinstance(shape, pymunk.Circle):
+                    dist = math.sqrt((x - shape.body.position.x)**2 + 
+                                (y - shape.body.position.y)**2)
+                    if dist < (radius + shape.radius + spacing):
                         overlaps = True
                         break
             
             if not overlaps:
+                body = pymunk.Body(1.0, pymunk.moment_for_circle(1.0, 0, radius))
+                body.position = (x, y)
+                shape = pymunk.Circle(body, radius)
+                shape.friction = 0.7
+                shape.elasticity = 0.1
                 self.space.add(body, shape)
                 circles.append((shape, radius))
-                size_distribution[radius] += 1
                 placed_circles += 1
                 
-                # Let physics settle frequently
+                # Let physics settle every few circles
                 if placed_circles % 5 == 0:
-                    for _ in range(20):
+                    for _ in range(10):
                         self.space.step(1/60.0)
             
             attempts += 1
         
         # Final settling
-        for _ in range(100):
+        for _ in range(60):
             self.space.step(1/60.0)
         
         return circles
 
     def run_physics_simulation(self):
-        """Two-phase physics simulation with box-pouring approach"""
-        # Set up physics space with stronger gravity
-        self.space.gravity = (0.0, 2000.0)  # Increased gravity
-        self.space.damping = 0.5  # More damping for better settling
+        """Focus on number filling first"""
+        # Set up physics space
+        self.space.gravity = (0.0, 900.0)
+        self.space.damping = 0.8
         
-        # Create boundaries
+        # Create number boundary
         self.create_number_boundary()
         
-        # First phase: Fill number by pouring
+        # Fill number region
         number_circles = self.add_circles_to_number(300)
         
-        # Let everything settle
+        # Let circles settle
         for _ in range(100):
             self.space.step(1/60.0)
         
-        # Second phase: Fill background
-        background_circles = self.fill_background(number_circles)
-        
-        # Final settling
-        for _ in range(60):
-            self.space.step(1/60.0)
-        
-        return number_circles + background_circles
+        return number_circles  # For now, just return number circles
 
 
     def create_number_boundary(self):
