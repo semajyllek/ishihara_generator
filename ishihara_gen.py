@@ -235,7 +235,7 @@ class IshiharaPlateGenerator:
         new_positions = []
         for angle in range(0, 360, 30):
             rad = math.radians(angle)
-            for dist_factor in [1.1, 1.3]:
+            for dist_factor in [1.2, 1.4]:
                 new_x = x + math.cos(rad) * (radius * 2 + spacing) * dist_factor
                 new_y = y + math.sin(rad) * (radius * 2 + spacing) * dist_factor
                 if self.is_inside_number(new_x, new_y):
